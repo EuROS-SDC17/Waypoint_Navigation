@@ -10,6 +10,10 @@ The waypoints and yaw information can be visualized using
 `draw_waypoints.py`. The plot corresponding to the simulator
 is in `{PROJECT_ROOT}/imgs/wp.png`.
 
+*Note.* At least in the current version, yaw in 
+`wp_yaw_const.txt` is in degrees, but that in 
+`churchlot_with_cars.csv` it is in radian.
+
 The script `wp_loader_test.py` shows how to read one message 
 from `/base_waypoints` and do some basic processing.
 
