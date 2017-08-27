@@ -31,6 +31,7 @@ that we have created in the `__init__` function.
 
 '''
 
+
 class DBWNode(object):
     def __init__(self):
         rospy.init_node('dbw_node')
@@ -46,10 +47,13 @@ class DBWNode(object):
         max_lat_accel = rospy.get_param('~max_lat_accel', 3.)
         max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
 
+        # steering
         self.steer_pub = rospy.Publisher('/vehicle/steering_cmd',
                                          SteeringCmd, queue_size=1)
+        # throttle
         self.throttle_pub = rospy.Publisher('/vehicle/throttle_cmd',
                                             ThrottleCmd, queue_size=1)
+        # brake
         self.brake_pub = rospy.Publisher('/vehicle/brake_cmd',
                                          BrakeCmd, queue_size=1)
 
@@ -57,10 +61,21 @@ class DBWNode(object):
         # self.controller = TwistController(<Arguments you wish to provide>)
 
         # TODO: Subscribe to all the topics you need to
+        # steering
+        rospy.Subscriber('/actual/steering_cmd', SteeringCmd, self.actual_steer_cb)
+        # throttle
+        rospy.Subscriber('/actual/throttle_cmd', ThrottleCmd, self.actual_throttle_cb)
+        # brake
+        rospy.Subscriber('/actual/brake_cmd', BrakeCmd, self.actual_brake_cb)
+        # Drive-by-Wire enabled notification
+        rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
 
         self.loop()
 
     def loop(self):
+        """
+        Main loop that periodically controls the vehicle
+        """
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
             # TODO: Get predicted throttle, brake, and steering using `twist_controller`
@@ -75,22 +90,68 @@ class DBWNode(object):
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
+        """
+        Publishes throttle, brake and steering values to car
+        :param throttle: throttle value
+        :param brake: brake value
+        :param steer: steering value
+        """
+        # publish throttle value to /vehicle/throttle_cmd
         tcmd = ThrottleCmd()
         tcmd.enable = True
         tcmd.pedal_cmd_type = ThrottleCmd.CMD_PERCENT
         tcmd.pedal_cmd = throttle
         self.throttle_pub.publish(tcmd)
 
+        # publish steering value to /vehicle/steering_cmd
         scmd = SteeringCmd()
         scmd.enable = True
         scmd.steering_wheel_angle_cmd = steer
         self.steer_pub.publish(scmd)
 
+        # publish brake value to /vehicle/brake_cmd
         bcmd = BrakeCmd()
         bcmd.enable = True
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
+
+    def dbw_enabled_cb(self, msg):
+        """
+        Callback for /vehicle/dbw_enabled topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
+        self.dbw_enabled = msg.data
+
+    def actual_steer_cb(self, msg):
+        """
+        Callback for /actual/steering topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
+        if self.dbw_enabled and self.steer is not None:
+            self.steer_data.append({'actual': msg.steering_wheel_angle_cmd,
+                                    'proposed': self.steer})
+            self.steer = None
+
+    def actual_throttle_cb(self, msg):
+        """
+        Callback for /actual/ topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
+        if self.dbw_enabled and self.throttle is not None:
+            self.throttle_data.append({'actual': msg.pedal_cmd,
+                                       'proposed': self.throttle})
+            self.throttle = None
+
+    def actual_brake_cb(self, msg):
+        """
+        Callback for /actual/ topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
+        if self.dbw_enabled and self.brake is not None:
+            self.brake_data.append({'actual': msg.pedal_cmd,
+                                    'proposed': self.brake})
+            self.brake = None
 
 
 if __name__ == '__main__':

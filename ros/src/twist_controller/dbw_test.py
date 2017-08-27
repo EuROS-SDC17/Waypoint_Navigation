@@ -21,7 +21,13 @@ performing on various commands.
 
 
 class DBWTestNode(object):
+    """
+    Class for testing the controller against reference data
+    """
     def __init__(self):
+        """
+        Initializes Drive-by-Wire tests
+        """
         rospy.init_node('dbw_test_node')
 
         rospy.Subscriber('/vehicle/steering_cmd', SteeringCmd, self.steer_cb)
@@ -50,51 +56,86 @@ class DBWTestNode(object):
         self.loop()
 
     def loop(self):
+        """
+        Testing loop
+        :return:
+        """
         rate = rospy.Rate(10) # 10Hz
         while not rospy.is_shutdown():
             rate.sleep()
         fieldnames = ['actual', 'proposed']
 
+        # process testing steering values
         with open(self.steerfile, 'w') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.steer_data)
 
+        # process testing throttle values
         with open(self.throttlefile, 'w') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.throttle_data)
 
+        # process testing brake values
         with open(self.brakefile, 'w') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.brake_data)
 
     def dbw_enabled_cb(self, msg):
+        """
+        Callback for /vehicle/dbw_enabled topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
         self.dbw_enabled = msg.data
 
     def steer_cb(self, msg):
+        """
+        Callback for /vehicle/steering_cmd topic subscriber
+        :param msg: message from steering_cmd topic
+        """
         self.steer = msg.steering_wheel_angle_cmd
 
     def throttle_cb(self, msg):
+        """
+        Callback for /vehicle/throttle_cmd topic subscriber
+        :param msg: message from throttle_cmd topic
+        """
         self.throttle = msg.pedal_cmd
 
     def brake_cb(self, msg):
+        """
+        Callback for /vehicle/brake_cmd topic subscriber
+        :param msg: message from brake_cmd topic
+        """
         self.brake = msg.pedal_cmd
 
     def actual_steer_cb(self, msg):
+        """
+        Callback for /actual/steering topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
         if self.dbw_enabled and self.steer is not None:
             self.steer_data.append({'actual': msg.steering_wheel_angle_cmd,
                                     'proposed': self.steer})
             self.steer = None
 
     def actual_throttle_cb(self, msg):
+        """
+        Callback for /actual/ topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
         if self.dbw_enabled and self.throttle is not None:
             self.throttle_data.append({'actual': msg.pedal_cmd,
                                        'proposed': self.throttle})
             self.throttle = None
 
     def actual_brake_cb(self, msg):
+        """
+        Callback for /actual/ topic subscriber
+        :param msg: message from dbw_enabled topic
+        """
         if self.dbw_enabled and self.brake is not None:
             self.brake_data.append({'actual': msg.pedal_cmd,
                                     'proposed': self.brake})
