@@ -1,5 +1,5 @@
 # Styx
----
+
 Styx is a package that contains a server for communicating with the simulator, and a bridge to translate and publish simulator messages to ROS topics.
 
 It is part of the packages that are not necessary to be changed for achieving the project. Consequently is just to be understood in its functioning.
