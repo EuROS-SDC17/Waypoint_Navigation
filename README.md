@@ -24,7 +24,7 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 
 1. Clone the project repository
 ```bash
-git clone https://github.com/udacity/carnd_capstone.git
+git clone https://github.com/EuROS-SDC17/Waypoint_Navigation.git
 ```
 
 2. Install python dependencies
@@ -41,10 +41,10 @@ roslaunch launch/styx.launch
 ```
 4. Run the simulator
 ```bash
-unzip lights_no_cars.zip
-cd lights_no_cars
-chmod +x ros_test.x86_64
-./ros_test.x86_64
+unzip linus_sys_int.zip
+cd linus_sys_int
+chmod +x system_integration.x86_64
+./system_integration.x86_64
 ```
 
 
