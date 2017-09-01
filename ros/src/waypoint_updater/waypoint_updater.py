@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Point
 from styx_msgs.msg import Lane, Waypoint
 
 import math
@@ -22,7 +22,9 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 
+debug=True
 
 class WaypointUpdater(object):
     """
@@ -52,12 +54,18 @@ class WaypointUpdater(object):
         Callback for receiving position and orientation of the vehicle
         :param msg: geometry_msgs/Pose message
         """
-        self.position = msg.position
-        self.orientation = msg.orientation
+        if debug:
+            print "received pose: ", msg.pose.position, msg.pose.orientation
+        self.position = msg.pose.position
+        self.orientation = msg.pose.orientation
         final_waypoints = self.prepare_waypoints()
+        if debug:
+            print "prepared waypoints: ", final_waypoints
         if not final_waypoints:
            return
-        msg = self.make_waypoints_message(msg.frame_id, final_waypoints)
+        msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
+        if debug:
+            print "new waypoint update message: ", msg
         self.final_waypoints_pub.publish(msg)
 
 
@@ -66,7 +74,10 @@ class WaypointUpdater(object):
         Callback for receiving all base waypoints of a track
         :param msg: styx_msgs/Lane message
         """
-        self.base_waypoints = msg.waypoints
+        if debug:
+            print "received waypoints: ", len(msg.waypoints)
+        if self.base_waypoints is None:
+            self.base_waypoints = msg.waypoints
 
     def traffic_cb(self, msg):
         """
@@ -74,6 +85,8 @@ class WaypointUpdater(object):
         :param msg:
         """
         # TODO: Callback for /traffic_waypoint message. Implement
+        if debug:
+            print "received traffic light: ", msg
         self.traffic_lights = msg
 
     def obstacle_cb(self, msg):
@@ -82,6 +95,8 @@ class WaypointUpdater(object):
         :param msg:
         """
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
+        if debug:
+            print "received obstacle: ", msg
         self.obstacles = msg
 
     def get_waypoint_velocity(self, waypoint):
@@ -124,7 +139,8 @@ class WaypointUpdater(object):
         :param b: second point
         :return: vector pointing from a to b
         """
-        direction = {}
+        direction = Point()
+        direction = direction
         direction.x = b.x - a.x
         direction.y = b.y - a.y
         direction.z = b.z - a.z
@@ -141,14 +157,19 @@ class WaypointUpdater(object):
         min_index = -1
         index = -1
         for waypoint in self.base_waypoints:
+            wp = waypoint.pose.pose.position
             index += 1
             # get direction from vehicle to waypoint
-            direction = self.make_vector(self.position, waypoint)
+            if debug:
+                print "orientation=", self.orientation
+            direction = self.make_vector(self.position, wp)
+            if debug:
+                print "direction=", direction
             # only waypoints ahead are relevant
-            if not self.is_matchin_orientation(self.orientation, direction):
+            if not self.is_matching_orientation(self.orientation, direction):
                 continue;
             # is it the nearest waypoint so far?
-            distance = self.distance(self.position, waypoint)
+            distance = self.distance(self.position, wp)
             if distance < min_distance:
                 min_distance = distance
                 min_index = index
@@ -191,10 +212,12 @@ class WaypointUpdater(object):
             prev_i = len(self.base_waypoints) - 1
         if next_i >= len(self.base_waypoints):
             next_i = 0
-        prev_direction = self.make_vector(self.position, self.base_waypoints[prev_i])
-        next_direction = self.make_vector(self.position, self.base_waypoints[next_i])
+        p_wb = self.base_waypoints[prev_i].pose.pose.position
+        n_wb = self.base_waypoints[next_i].pose.pose.position
+        prev_direction = self.make_vector(self.position, p_wb)
+        next_direction = self.make_vector(self.position, n_wb)
         scan_direction = 1 # default direction is towards next waypoint in sequence
-        if not self.is_matchin_orientation(self.orientation, next_direction):
+        if not self.is_matching_orientation(self.orientation, next_direction):
             # if orientation with next waypoint doesn't match, we need to scan backwards
             scan_direction = -1;
 
@@ -207,7 +230,9 @@ class WaypointUpdater(object):
             elif scan_direction > 0 and j >= len(self.base_waypoints):
                 # wrap to zero
                 j = 0;
-            result.append(self.base_waypoints[j])
+            self.set_waypoint_velocity(self.base_waypoints, j, DEFAULT_VELOCITY)
+            waypoint = self.base_waypoints[j]
+            result.append(waypoint)
         return result
 
     def make_waypoints_message(self, frame_id, waypoints):
