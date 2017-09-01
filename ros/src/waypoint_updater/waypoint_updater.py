@@ -4,6 +4,8 @@ import rospy
 from geometry_msgs.msg import PoseStamped, Point
 from styx_msgs.msg import Lane, Waypoint
 
+import tf
+
 import math
 
 '''
@@ -21,10 +23,10 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 10 # Number of waypoints we will publish. You can change this number
 DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 
-debug=True
+debug=False
 
 class WaypointUpdater(object):
     """
@@ -57,7 +59,13 @@ class WaypointUpdater(object):
         if debug:
             print "received pose: ", msg.pose.position, msg.pose.orientation
         self.position = msg.pose.position
-        self.orientation = msg.pose.orientation
+
+        yaw = tf.transformations.euler_from_quaternion(\
+                [msg.pose.orientation.x,msg.pose.orientation.y,\
+                msg.pose.orientation.z,msg.pose.orientation.w])[2]
+
+        self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
+
         final_waypoints = self.prepare_waypoints()
         if debug:
             print "prepared waypoints: ", final_waypoints
@@ -66,6 +74,7 @@ class WaypointUpdater(object):
         msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
         if debug:
             print "new waypoint update message: ", msg
+            #rospy.logdebug("length " + str(len(msg.waypoints)))
         self.final_waypoints_pub.publish(msg)
 
 
@@ -140,7 +149,6 @@ class WaypointUpdater(object):
         :return: vector pointing from a to b
         """
         direction = Point()
-        direction = direction
         direction.x = b.x - a.x
         direction.y = b.y - a.y
         direction.z = b.z - a.z
@@ -153,6 +161,8 @@ class WaypointUpdater(object):
         """
         if self.position is None or self.base_waypoints is None:
             return -1
+        print "find nearest, self position"
+        print self.position
         min_distance = 1E6
         min_index = -1
         index = -1
@@ -173,6 +183,8 @@ class WaypointUpdater(object):
             if distance < min_distance:
                 min_distance = distance
                 min_index = index
+        print "found nearest"
+        print self.base_waypoints[min_index].pose.pose.position
         return min_index
 
     def is_matching_orientation(self, a, b):
@@ -182,6 +194,8 @@ class WaypointUpdater(object):
         :param b: second orientation
         :return: true if orientations point to the same half-space
         """
+
+        #print "dp",a.x * b.x + a.y * b.y + a.z * b.z
         return a.x * b.x + a.y * b.y + a.z * b.z > 0;
 
     def distance(self, a, b):
@@ -203,6 +217,8 @@ class WaypointUpdater(object):
         :return: LOOKAHEAD_WPS number of waypoints laying ahead of the vehicle, starting with the nearest
         """
         i = self.find_nearest_waypoint_index_ahead()
+        print "nearest", i, "base", \
+                0 if self.base_waypoints is None else len(self.base_waypoints)
         if i == -1:
             return []
         # now decide which way to go
