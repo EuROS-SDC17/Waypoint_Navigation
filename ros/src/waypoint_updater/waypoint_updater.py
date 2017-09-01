@@ -33,14 +33,17 @@ class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
-        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
 
         rospy.Subscriber('/traffic_waypoint', Waypoint, self.traffic_cb)
         rospy.Subscriber('/obstacle_waypoint', Waypoint, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
+        self.search_range = int(rospy.get_param('~search_range'))
+
+        self.previous_closest_wp_index = None
         self.position = None
         self.orientation = None
         self.base_waypoints = None
@@ -62,7 +65,7 @@ class WaypointUpdater(object):
         self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
 
         final_waypoints = self.prepare_waypoints()
-        rospy.loginfo("prepared waypoints: {0}".format(final_waypoints))
+        rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
 
         if not final_waypoints:
            return
@@ -154,16 +157,36 @@ class WaypointUpdater(object):
         """
         if self.position is None or self.base_waypoints is None:
             return -1
-        rospy.loginfo("find nearest waypoint for position: {0}".format(self.position))
+        rospy.logdebug("find nearest waypoint for position: {0}".format(self.position))
+
         min_distance = 1E6
         min_index = -1
-        index = -1
-        for waypoint in self.base_waypoints:
-            wp = waypoint.pose.pose.position
-            index += 1
+
+        if self.previous_closest_wp_index is None:
+            dist_decreased = False
+            prev_dist = None
+            candidate_index = None
+            # NOTE this is a somewhat approximate but faster version
+            # will fail if there are different sections of the track
+            # that are very close. If we don't do this very often
+            # we could afford to do a full scan
+            for index,waypoint in enumerate(self.base_waypoints):
+                wp = waypoint.pose.pose.position
+                distance = self.distance(self.position, wp)
+                if (prev_dist is not None) and (distance>prev_dist) and (dist_decreased):
+                    break
+                candidate_index = index
+                if (prev_dist is not None) and (distance<prev_dist):
+                    dist_decreased = True
+                prev_dist = distance
+        else:
+            candidate_index = self.previous_closest_wp_index
+
+        for index in range(candidate_index-self.search_range,candidate_index+self.search_range+1):
+            wp = self.base_waypoints[index % len(self.base_waypoints)].pose.pose.position
             # get direction from vehicle to waypoint
             direction = self.make_vector(self.position, wp)
-            rospy.loginfo("orientation = {0}, direction = {1}".format(self.orientation, direction))
+            rospy.logdebug("orientation = {0}, direction = {1}".format(self.orientation, direction))
             # only waypoints ahead are relevant
             if not self.is_matching_orientation(self.orientation, direction):
                 continue;
@@ -171,9 +194,10 @@ class WaypointUpdater(object):
             distance = self.distance(self.position, wp)
             if distance < min_distance:
                 min_distance = distance
-                min_index = index
-        rospy.loginfo("found nearest waypoint ahead: {0}".format(
+                min_index = index % len(self.base_waypoints)
+        rospy.logdebug("found nearest waypoint ahead: {0}".format(
                       self.base_waypoints[min_index].pose.pose.position))
+        self.previous_closest_wp_index = min_index
         return min_index
 
     def is_matching_orientation(self, a, b):
@@ -209,8 +233,10 @@ class WaypointUpdater(object):
         :return: LOOKAHEAD_WPS number of waypoints laying ahead of the vehicle, starting with the nearest
         """
         i = self.find_nearest_waypoint_index_ahead()
-        rospy.logdebug("nearest waypoint index = {0} of {1}".format(i, \
+        rospy.loginfo("nearest waypoint for position {0} index = {1} of {2}".format(\
+                self.position, i, \
                 0 if self.base_waypoints is None else len(self.base_waypoints)))
+        return []
         if i == -1:
             return []
         # now decide which way to go

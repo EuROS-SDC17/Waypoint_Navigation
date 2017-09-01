@@ -3,5 +3,7 @@
   <!--
     <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater"/>
 -->
-    <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater" output="screen"/>
+    <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater" output="screen">
+      <param name="search_range" value="20"/>
+    </node>
 </launch>
