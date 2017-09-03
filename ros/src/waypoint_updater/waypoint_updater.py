@@ -26,8 +26,6 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 LOOKAHEAD_WPS = 10 # Number of waypoints we will publish. You can change this number
 DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 
-debug=False
-
 class WaypointUpdater(object):
     """
     Responsible for updating vehicle waypoints
@@ -56,25 +54,20 @@ class WaypointUpdater(object):
         Callback for receiving position and orientation of the vehicle
         :param msg: geometry_msgs/Pose message
         """
-        if debug:
-            print "received pose: ", msg.pose.position, msg.pose.orientation
+        rospy.logdebug("received pose: {0}".format(msg))
         self.position = msg.pose.position
 
-        yaw = tf.transformations.euler_from_quaternion(\
-                [msg.pose.orientation.x,msg.pose.orientation.y,\
-                msg.pose.orientation.z,msg.pose.orientation.w])[2]
-
+        orient = msg.pose.orientation
+        yaw = tf.transformations.euler_from_quaternion([orient.x, orient.y, orient.z, orient.w])[2]
         self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
 
         final_waypoints = self.prepare_waypoints()
-        if debug:
-            print "prepared waypoints: ", final_waypoints
+        rospy.loginfo("prepared waypoints: {0}".format(final_waypoints))
+
         if not final_waypoints:
            return
         msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
-        if debug:
-            print "new waypoint update message: ", msg
-            #rospy.logdebug("length " + str(len(msg.waypoints)))
+
         self.final_waypoints_pub.publish(msg)
 
 
@@ -83,8 +76,8 @@ class WaypointUpdater(object):
         Callback for receiving all base waypoints of a track
         :param msg: styx_msgs/Lane message
         """
-        if debug:
-            print "received waypoints: ", len(msg.waypoints)
+        rospy.logdebug("received waypoints: {0}".format(len(msg.waypoints)))
+
         if self.base_waypoints is None:
             self.base_waypoints = msg.waypoints
 
@@ -93,9 +86,9 @@ class WaypointUpdater(object):
         Callback for receiving traffic lights
         :param msg:
         """
+        rospy.logdebug("received traffic light: {0}".format(msg))
+
         # TODO: Callback for /traffic_waypoint message. Implement
-        if debug:
-            print "received traffic light: ", msg
         self.traffic_lights = msg
 
     def obstacle_cb(self, msg):
@@ -103,9 +96,9 @@ class WaypointUpdater(object):
         Callback for receiving obstacle positions
         :param msg:
         """
+        rospy.logdebug("received obstacle: {0}".format(msg))
+
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
-        if debug:
-            print "received obstacle: ", msg
         self.obstacles = msg
 
     def get_waypoint_velocity(self, waypoint):
@@ -118,10 +111,10 @@ class WaypointUpdater(object):
 
     def set_waypoint_velocity(self, waypoints, waypoint, velocity):
         """
-
-        :param waypoints:
-        :param waypoint:
-        :param velocity:
+        Sets the velocity that the vehicle should be driving at at the given waypoint
+        :param waypoints: list of all waypoints
+        :param waypoint: waypoint where we want to set linear speed
+        :param velocity: velocity value
         :return:
         """
         waypoints[waypoint].twist.twist.linear.x = velocity
@@ -129,9 +122,9 @@ class WaypointUpdater(object):
     def distance(self, waypoints, wp1, wp2):
         """
         Computes cumulative distance between two waypoints
-        :param waypoints:
-        :param wp1:
-        :param wp2:
+        :param waypoints: list of all waypoints
+        :param wp1: waypoint 1
+        :param wp2: waypoint 2
         :return:
         """
         dist = 0
@@ -161,8 +154,7 @@ class WaypointUpdater(object):
         """
         if self.position is None or self.base_waypoints is None:
             return -1
-        print "find nearest, self position"
-        print self.position
+        rospy.loginfo("find nearest waypoint for position: {0}".format(self.position))
         min_distance = 1E6
         min_index = -1
         index = -1
@@ -170,11 +162,8 @@ class WaypointUpdater(object):
             wp = waypoint.pose.pose.position
             index += 1
             # get direction from vehicle to waypoint
-            if debug:
-                print "orientation=", self.orientation
             direction = self.make_vector(self.position, wp)
-            if debug:
-                print "direction=", direction
+            rospy.loginfo("orientation = {0}, direction = {1}".format(self.orientation, direction))
             # only waypoints ahead are relevant
             if not self.is_matching_orientation(self.orientation, direction):
                 continue;
@@ -183,8 +172,8 @@ class WaypointUpdater(object):
             if distance < min_distance:
                 min_distance = distance
                 min_index = index
-        print "found nearest"
-        print self.base_waypoints[min_index].pose.pose.position
+        rospy.loginfo("found nearest waypoint ahead: {0}".format(
+                      self.base_waypoints[min_index].pose.pose.position))
         return min_index
 
     def is_matching_orientation(self, a, b):
@@ -200,12 +189,15 @@ class WaypointUpdater(object):
 
     def distance(self, a, b):
         """
-
-        :param a:
-        :param b:
-        :return:
+        Euclidean distance between two 3D points
+        :param a: first point
+        :param b: second point
+        :return: the distance
         """
-        return math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z))
+        xdiff = a.x - b.x
+        ydiff = a.y - b.y
+        zdiff = a.z - b.z
+        return math.sqrt(xdiff*xdiff + ydiff*ydiff + zdiff*zdiff)
 
     def prepare_waypoints(self):
         """
@@ -217,8 +209,8 @@ class WaypointUpdater(object):
         :return: LOOKAHEAD_WPS number of waypoints laying ahead of the vehicle, starting with the nearest
         """
         i = self.find_nearest_waypoint_index_ahead()
-        print "nearest", i, "base", \
-                0 if self.base_waypoints is None else len(self.base_waypoints)
+        rospy.logdebug("nearest waypoint index = {0} of {1}".format(i, \
+                0 if self.base_waypoints is None else len(self.base_waypoints)))
         if i == -1:
             return []
         # now decide which way to go
