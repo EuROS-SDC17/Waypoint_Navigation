@@ -11,6 +11,8 @@ import tf
 import cv2
 from traffic_light_config import config
 import yaml
+import numpy as np
+from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -57,6 +59,10 @@ class TLDetector(object):
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
+        self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y) for waypoint in self.waypoints])
+        # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
+        # as implemented in https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.spatial.KDTree.html
+        self.waypoints_tree = KDTree(self.waypoints_array)
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -94,6 +100,7 @@ class TLDetector(object):
     def get_closest_waypoint(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
+            solved using a k-d tree of waypoints coordinates
         Args:
             pose (Pose): position to match a waypoint to
 
@@ -101,8 +108,8 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        #TODO implement
-        return 0
+        index_closest_waypoint = self.waypoints_tree.query([(pose.position.x, pose.position.y)])[1][0]
+        return index_closest_waypoint
 
 
     def project_to_image_plane(self, point_in_world):
