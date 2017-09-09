@@ -111,6 +111,7 @@ class TLDetector(object):
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
         self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y) for waypoint in self.waypoints])
+
         # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
         # as implemented in https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.spatial.KDTree.html
         self.waypoints_tree = KDTree(self.waypoints_array)
@@ -178,15 +179,15 @@ class TLDetector(object):
         fx = self.config['camera_info']['focal_length_x']
         fy = self.config['camera_info']['focal_length_y']
 
-        # Image shape
+        # The image shape
         image_width = self.config['camera_info']['image_width']
         image_height = self.config['camera_info']['image_height']
 
-        # principal x,y points that are usually at the image center
+        # Principal x,y points that are at the image center
         cx = int(image_width/2.0)
         cy = int(image_height/2.0)
 
-        # get transform between pose of camera and world frame
+        # Get transform between pose of camera and world frame
         trans = None
         try:
             now = rospy.Time.now()
@@ -198,7 +199,7 @@ class TLDetector(object):
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #Using tranform and rotation to calculate 2D position of light in image
+        # Using tranform and rotation to calculate 2D position of light in image
         # based on http://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
 
         rvec = (0.0, 0.0, 0.0) # Rotation vector : no need because the camera is calibrated
@@ -208,10 +209,10 @@ class TLDetector(object):
                                  [ 0, fy, cy],
                                  [ 0,  0,  1]], dtype=np.float32)
 
-        # deriving our target position in space
+        # Deriving our target position in space
         target_x, target_y, target_z = point_in_world
 
-        # rotating target position in respect of our car yaw and car position
+        # Rotating target position in respect of our car yaw and car position
         rotated_x, rotated_y = self.clockwise_rotation(target_x, target_y, self.car_x, self.car_y, self.yaw)
 
         objectPoints = np.array([rotated_x, rotated_y, target_z], dtype=np.float32)
