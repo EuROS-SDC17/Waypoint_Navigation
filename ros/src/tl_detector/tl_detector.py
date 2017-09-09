@@ -12,6 +12,7 @@ import cv2
 from traffic_light_config import config
 import yaml
 import numpy as np
+import math
 from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3
@@ -54,8 +55,58 @@ class TLDetector(object):
 
         rospy.spin()
 
+    def Quaternion_toEulerianAngle(self, x, y, z, w):
+        """
+        See: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+        """
+
+        ysqr = y * y
+
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + ysqr)
+        X = math.degrees(math.atan2(t0, t1))
+
+        t2 = +2.0 * (w * y - z * x)
+        t2 = 1 if t2 > 1 else t2
+        t2 = -1 if t2 < -1 else t2
+        Y = math.degrees(math.asin(t2))
+
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (ysqr + z * z)
+        Z = math.degrees(math.atan2(t3, t4))
+
+        return (X, Y, Z)
+
+    def clockwise_rotation(self, target_x, target_y, x_origin=0.0, y_origin=0.0, yaw_degrees=0.0):
+        """
+        see:  https://stackoverflow.com/questions/20104611/find-new-coordinates-of-a-point-after-rotation
+
+        """
+        # Converting degrees into radiants
+        rad_yaw = math.radians(yaw_degrees)
+
+        # Centering to the origin
+        centered_x = target_x - x_origin
+        centered_y = target_y - y_origin
+
+        # y' = y*cos(a) - x*sin(a)
+        rotated_y = centered_y * math.cos(rad_yaw) - centered_x * math.sin(rad_yaw)
+
+        # x' = y*sin(a) + x*cos(a)
+        rotated_x = centered_y * math.sin(rad_yaw) + centered_x * math.cos(rad_yaw)
+
+        return (rotated_x, rotated_y)
+
     def pose_cb(self, msg):
         self.pose = msg
+
+        # deriving roll, pitch and yaw from car's position expressed in quaterions
+        self.car_x = self.pose.pose.orientation.x
+        self.car_y = self.pose.pose.orientation.y
+        self.car_z = self.pose.pose.orientation.z
+        self.car_w = self.pose.pose.orientation.w
+        # Note that yaw is expressed in degrees
+        self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(self.car_x, self.car_y, self.car_z, self.car_w)
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
@@ -111,7 +162,6 @@ class TLDetector(object):
         index_closest_waypoint = self.waypoints_tree.query([(pose.position.x, pose.position.y)])[1][0]
         return index_closest_waypoint
 
-
     def project_to_image_plane(self, point_in_world):
         """Project point from 3D world coordinates to 2D camera image location
 
@@ -124,10 +174,17 @@ class TLDetector(object):
 
         """
 
+        # The focal lengths expressed in pixel units
         fx = self.config['camera_info']['focal_length_x']
         fy = self.config['camera_info']['focal_length_y']
+
+        # Image shape
         image_width = self.config['camera_info']['image_width']
         image_height = self.config['camera_info']['image_height']
+
+        # principal x,y points that are usually at the image center
+        cx = int(image_width/2.0)
+        cy = int(image_height/2.0)
 
         # get transform between pose of camera and world frame
         trans = None
@@ -141,10 +198,28 @@ class TLDetector(object):
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #TODO Use tranform and rotation to calculate 2D position of light in image
+        #Using tranform and rotation to calculate 2D position of light in image
+        # based on http://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
 
-        x = 0
-        y = 0
+        rvec = (0.0, 0.0, 0.0) # Rotation vector : no need because the camera is calibrated
+        tvec = (0.0, 0.0, 0.0) # Translation vector : no need because the camera is calibrated
+
+        cameraMatrix = np.array([[fx,  0, cx],
+                                 [ 0, fy, cy],
+                                 [ 0,  0,  1]], dtype=np.float32)
+
+        # deriving our target position in space
+        target_x, target_y, target_z = point_in_world
+
+        # rotating target position in respect of our car yaw and car position
+        rotated_x, rotated_y = self.clockwise_rotation(target_x, target_y, self.car_x, self.car_y, self.yaw)
+
+        objectPoints = np.array([rotated_x, rotated_y, target_z], dtype=np.float32)
+
+        imagePoints, jacobian = cv2.projectPoints(objectPoints, rvec, tvec, cameraMatrix, distCoeffs = None)
+
+        x = imagePoints[0][0][0]
+        y = imagePoints[0][0][1]
 
         return (x, y)
 
