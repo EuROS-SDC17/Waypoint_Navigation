@@ -217,7 +217,9 @@ class TLDetector(object):
                                  [ 0,  0,  1]], dtype=np.float32)
 
         # Deriving our target position in space
-        target_x, target_y, target_z = point_in_world
+        target_x = point_in_world.x
+        target_y = point_in_world.y
+        target_z = point_in_world.z
 
         # Rotating target position in respect of our car yaw and car position
         rotated_x, rotated_y = self.clockwise_rotation(target_x, target_y, self.car_x, self.car_y, self.yaw)
@@ -283,7 +285,7 @@ class TLDetector(object):
                 closest_light_wp = light_wp
 
         if closest_light:
-            state = closest_light.state  # Temporary use the state from the simulator
+            state = self.get_light_state(light)
             return closest_light_wp, state
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
