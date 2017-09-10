@@ -99,14 +99,19 @@ class TLDetector(object):
 
     def pose_cb(self, msg):
         self.pose = msg
+        
+        # Record car's x,y,z position
+        self.car_x = self.pose.pose.position.x
+        self.car_y = self.pose.pose.position.y
+        self.car_z = self.pose.pose.position.z
 
-        # deriving roll, pitch and yaw from car's position expressed in quaterions
-        self.car_x = self.pose.pose.orientation.x
-        self.car_y = self.pose.pose.orientation.y
-        self.car_z = self.pose.pose.orientation.z
-        self.car_w = self.pose.pose.orientation.w
+        # Deriving roll, pitch and yaw from car's position expressed in quaterions
+        q_x = self.pose.pose.orientation.x
+        q_y = self.pose.pose.orientation.y
+        q_z = self.pose.pose.orientation.z
+        q_w = self.pose.pose.orientation.w
         # Note that yaw is expressed in degrees
-        self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(self.car_x, self.car_y, self.car_z, self.car_w)
+        self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(q_x, q_y, q_z, q_w)
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
