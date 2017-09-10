@@ -16,6 +16,7 @@ import math
 from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3
+MAX_DISTANCE = 100  # Ignore traffic lights that are further
 
 class TLDetector(object):
     def __init__(self):
@@ -264,14 +265,23 @@ class TLDetector(object):
 
         """
         light = None
-        light_positions = self.config['light_positions']
         if(self.pose):
             car_position = self.get_closest_waypoint(self.pose.pose)
 
-        #TODO find the closest visible traffic light (if one exists)
+        # Finds the closest traffic light by comparing waypoints
+        closest_distance = MAX_DISTANCE
+        light = None
+        for possible_light in self.lights:
+            light_wp = self.get_closest_waypoint(possible_light.pose.pose)
+            distance = light_wp - car_position
+
+            # Ignore traffic lights that are behind us
+            if (distance < closest_distance and distance > 0):
+                light = possible_light
+                closest_distance = distance
 
         if light:
-            state = self.get_light_state(light)
+            state = light.state  # Temporary use the state from the simulator
             return light_wp, state
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
