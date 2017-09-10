@@ -99,7 +99,7 @@ class TLDetector(object):
 
     def pose_cb(self, msg):
         self.pose = msg
-        
+
         # Record car's x,y,z position
         self.car_x = self.pose.pose.position.x
         self.car_y = self.pose.pose.position.y
@@ -115,7 +115,8 @@ class TLDetector(object):
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
-        self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y) for waypoint in self.waypoints])
+        self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y)
+                                         for waypoint in self.waypoints.waypoints])
 
         # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
         # as implemented in https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.spatial.KDTree.html
