@@ -5,12 +5,75 @@ Once the vehicle is able to process waypoints, generate steering and throttle co
 The traffic light detection node (tl_detector.py) subscribes to three topics:
 
 *    /base_waypoints provides the complete list of waypoints for the course.
+
+	Type: styx_msgs/Lane
+
+	Publishers: 
+	 * /waypoint_loader (http://10.0.2.15:36383/)
+
+	Subscribers: 
+	 * /waypoint_updater (http://10.0.2.15:41425/)
+	 * /tl_detector (http://10.0.2.15:39517/)
+
 *    /current_pose can be used used to determine the vehicle's location.
+
+	Type: geometry_msgs/PoseStamped
+
+	Publishers: None
+
+	Subscribers: 
+	 * /pure_pursuit (http://10.0.2.15:46345/)
+	 * /waypoint_updater (http://10.0.2.15:41425/)
+	 * /tl_detector (http://10.0.2.15:39517/)
+
+	std_msgs/Header header
+	  uint32 seq
+	  time stamp
+	  string frame_id
+	geometry_msgs/Pose pose
+	  geometry_msgs/Point position
+	    float64 x
+	    float64 y
+	    float64 z
+	  geometry_msgs/Quaternion orientation
+	    float64 x
+	    float64 y
+	    float64 z
+	    float64 w
+
 *    /camera/image_raw which provides an image stream from the car's camera. These images are used to determine the color of upcoming traffic lights.
+
+	Type: sensor_msgs/Image
+
+	Publishers: None
+
+	Subscribers: 
+	 * /tl_detector (http://10.0.2.15:39517/)
+
+	std_msgs/Header header
+	  uint32 seq
+	  time stamp
+	  string frame_id
+	uint32 height
+	uint32 width
+	string encoding
+	uint8 is_bigendian
+	uint32 step
+	uint8[] data
 
 The node should publish the index of the waypoint for nearest upcoming red light to a single topic:
 
 *    /traffic_waypoint
+
+	Type: std_msgs/Int32
+
+	Publishers: 
+	 * /tl_detector (http://10.0.2.15:39517/)
+
+	Subscribers: 
+	 * /waypoint_updater (http://10.0.2.15:41425/)
+
+	int32 data
 
 For example, if waypoints is the complete list of waypoints, and an upcoming red light is nearest to waypoints[12], then 12 should be published /traffic_waypoint. This index can later be used by the waypoint updater node to set the target velocity for waypoints[12] to 0 and smoothly decrease the vehicle velocity in the waypoints leading up to waypoints[12].
 
