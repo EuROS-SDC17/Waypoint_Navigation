@@ -226,10 +226,12 @@ class TLDetector(object):
 
         objectPoints = np.array([rotated_x, rotated_y, target_z], dtype=np.float32)
 
-        imagePoints, jacobian = cv2.projectPoints(objectPoints, rvec, tvec, cameraMatrix, distCoeffs = None)
+        imagePoints, jacobian = cv2.projectPoints(np.array([objectPoints]), rvec, tvec, cameraMatrix, distCoeffs = None)
 
         x = imagePoints[0][0][0]
         y = imagePoints[0][0][1]
+
+        print(imagePoints)
 
         return (x, y)
 
