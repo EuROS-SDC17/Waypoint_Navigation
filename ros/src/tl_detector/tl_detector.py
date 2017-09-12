@@ -235,7 +235,7 @@ Psi = angle of camera rotation
 
         objectPoints = np.array([[rotated_x, rotated_y, target_z]], dtype=np.float32)
 
-        imagePoints, jacobian = cv2.projectPoints([objectPoints], rvec, tvec, cameraMatrix, distCoeffs = None, aspectRatio=0)
+        imagePoints, jacobian = cv2.projectPoints(objectPoints, rvec, tvec, cameraMatrix, distCoeffs = None, aspectRatio=0)
 
         x = imagePoints[0][0][0]
         y = imagePoints[0][0][1]
