@@ -13,6 +13,7 @@ from traffic_light_config import config
 import yaml
 import numpy as np
 import math
+from datetime import datetime
 from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3
@@ -82,6 +83,12 @@ class TLDetector(object):
         """
         see:  https://stackoverflow.com/questions/20104611/find-new-coordinates-of-a-point-after-rotation
 
+        Ywc = -Xwt * Sin(psi) + Ywt * Cos(psi);
+        Xwc =  Xwt * Cos(psi) + Ywt * Sin(psi);
+        wc =  Zwt
+
+        Psi = angle of camera rotation
+        (Xwc,Ywc,Zwc) = world coordinates of object transformed to camera orientation
         """
         # Converting degrees into radiants
         rad_yaw = math.radians(yaw_degrees)
@@ -97,38 +104,12 @@ class TLDetector(object):
         rotated_x = centered_y * math.sin(rad_yaw) + centered_x * math.cos(rad_yaw)
 
         return (rotated_x, rotated_y)
-		
-		Ywc = -Xwt * Sin(psi) + Ywt * Cos(psi);
-		Xwc =  Xwt * Cos(psi) + Ywt * Sin(psi);
-		Zwc =  Zwt
-
-Psi = angle of camera rotation
-(Xwc,Ywc,Zwc) = world coordinates of object transformed to camera orientation
 
     def pose_cb(self, msg):
         self.pose = msg
 
-        # Record car's x,y,z position
-        self.car_x = self.pose.pose.position.x
-        self.car_y = self.pose.pose.position.y
-        self.car_z = self.pose.pose.position.z
-
-        # Deriving roll, pitch and yaw from car's position expressed in quaterions
-        q_x = self.pose.pose.orientation.x
-        q_y = self.pose.pose.orientation.y
-        q_z = self.pose.pose.orientation.z
-        q_w = self.pose.pose.orientation.w
-        # Note that yaw is expressed in degrees
-        self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(q_x, q_y, q_z, q_w)
-
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
-        self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y)
-                                         for waypoint in self.waypoints.waypoints])
-
-        # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
-        # as implemented in https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.spatial.KDTree.html
-        self.waypoints_tree = KDTree(self.waypoints_array)
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -201,6 +182,15 @@ Psi = angle of camera rotation
         cx = int(image_width/2.0)
         cy = int(image_height/2.0)
 
+        # Deriving roll, pitch and yaw from car's position expressed in quaterions
+        q_x = self.pose.pose.orientation.x
+        q_y = self.pose.pose.orientation.y
+        q_z = self.pose.pose.orientation.z
+        q_w = self.pose.pose.orientation.w
+
+        # Note that yaw is expressed in degrees
+        self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(q_x, q_y, q_z, q_w)
+
         # Get transform between pose of camera and world frame
         trans = None
         try:
@@ -237,10 +227,10 @@ Psi = angle of camera rotation
 
         imagePoints, jacobian = cv2.projectPoints(objectPoints, rvec, tvec, cameraMatrix, distCoeffs = None, aspectRatio=0)
 
-        x = imagePoints[0][0][0]
-        y = imagePoints[0][0][1]
+        x = int(imagePoints[0][0][0])
+        y = int(imagePoints[0][0][1])
 
-        print(imagePoints)
+        print(str(datetime.now()), "Traffic light position on screen: ",x,y)
 
         return (x, y)
 
@@ -277,29 +267,49 @@ Psi = angle of camera rotation
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
+
         if(self.pose):
+            # Record car's x,y,z position
+            self.car_x = self.pose.pose.position.x
+            self.car_y = self.pose.pose.position.y
+            self.car_z = self.pose.pose.position.z
+            # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
+            # as implemented in https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.spatial.KDTree.html
+            self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y)
+                                              for waypoint in self.waypoints.waypoints])
+            self.waypoints_tree = KDTree(self.waypoints_array)
             car_position = self.get_closest_waypoint(self.pose.pose)
 
-        # Finds the closest traffic light by comparing waypoints
-        closest_distance = MAX_DISTANCE
-        closest_light = None
-        closest_light_wp = None
+            # Finds the closest traffic light by comparing waypoints
+            closest_distance = MAX_DISTANCE
+            closest_light = None
+            closest_light_wp = None
+            closest_light_index = None
 
-        for light in self.lights:
-            light_wp = self.get_closest_waypoint(light.pose.pose)
-            distance = light_wp - car_position
+            for k, light in enumerate(self.lights):
+                light_wp = self.get_closest_waypoint(light.pose.pose)
+                distance = light_wp - car_position
+                # Updating the closest light to the one being processed
+                # Ignore traffic lights that are behind us
+                if distance > 0 and distance < closest_distance:
+                    closest_distance = distance
+                    closest_light = light
+                    closest_light_wp = light_wp
+                    closest_light_index = k
 
-            # Ignore traffic lights that are behind us
-            if (distance < closest_distance and distance > 0):
-                closest_distance = distance
-                closest_light = light
-                closest_light_wp = light_wp
+            print (str(datetime.now()), "Car position:", car_position)
 
-        if closest_light:
-            state = self.get_light_state(light)
-            return closest_light_wp, state
-        self.waypoints = None
-        return -1, TrafficLight.UNKNOWN
+            if closest_light:
+                print(str(datetime.now()), "Visible traffic light no", closest_light_index ,"at distance:", closest_distance)
+                try:
+                    state = self.get_light_state(light)
+                except:
+                    state = TrafficLight.UNKNOWN
+
+                print("Traffic light state is:", state)
+                return light_wp, state
+            else:
+                return -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
     try:
