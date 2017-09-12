@@ -307,7 +307,7 @@ class TLDetector(object):
                     state = TrafficLight.UNKNOWN
 
                 print("Traffic light state is:", state)
-                return light_wp, state
+                return closest_light_wp, state
             else:
                 return -1, TrafficLight.UNKNOWN
 
