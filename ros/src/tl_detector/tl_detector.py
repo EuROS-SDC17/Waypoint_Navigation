@@ -253,6 +253,10 @@ class TLDetector(object):
 
         x, y = self.project_to_image_plane(light.pose.pose.position)
 
+        cv2.circle(cv_image, (x, y), 15, (0,0,255), -1)
+        cv2.imshow('image', cv_image)
+        cv2.waitKey(1)
+
         #TODO use light location to zoom in on traffic light in image
 
         #Get classification
