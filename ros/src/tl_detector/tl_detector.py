@@ -97,6 +97,13 @@ class TLDetector(object):
         rotated_x = centered_y * math.sin(rad_yaw) + centered_x * math.cos(rad_yaw)
 
         return (rotated_x, rotated_y)
+		
+		Ywc = -Xwt * Sin(psi) + Ywt * Cos(psi);
+		Xwc =  Xwt * Cos(psi) + Ywt * Sin(psi);
+		Zwc =  Zwt
+
+Psi = angle of camera rotation
+(Xwc,Ywc,Zwc) = world coordinates of object transformed to camera orientation
 
     def pose_cb(self, msg):
         self.pose = msg
@@ -208,9 +215,11 @@ class TLDetector(object):
 
         # Using tranform and rotation to calculate 2D position of light in image
         # based on http://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
+		# https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
+		# https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
 
-        rvec = (0.0, 0.0, 0.0) # Rotation vector : no need because the camera is calibrated
-        tvec = (0.0, 0.0, 0.0) # Translation vector : no need because the camera is calibrated
+        rvec, _ = cv2.Rodrigues(np.identity(3)) # Rotation vector : no need because the camera is calibrated
+        tvec = rvec.copy() # Translation vector : no need because the camera is centered
 
         cameraMatrix = np.array([[fx,  0, cx],
                                  [ 0, fy, cy],
@@ -224,9 +233,9 @@ class TLDetector(object):
         # Rotating target position in respect of our car yaw and car position
         rotated_x, rotated_y = self.clockwise_rotation(target_x, target_y, self.car_x, self.car_y, self.yaw)
 
-        objectPoints = np.array([rotated_x, rotated_y, target_z], dtype=np.float32)
+        objectPoints = np.array([[rotated_x, rotated_y, target_z]], dtype=np.float32)
 
-        imagePoints, jacobian = cv2.projectPoints(np.array([objectPoints]), rvec, tvec, cameraMatrix, distCoeffs = None)
+        imagePoints, jacobian = cv2.projectPoints([objectPoints], rvec, tvec, cameraMatrix, distCoeffs = None, aspectRatio=0)
 
         x = imagePoints[0][0][0]
         y = imagePoints[0][0][1]
