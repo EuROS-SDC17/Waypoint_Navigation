@@ -306,7 +306,7 @@ class TLDetector(object):
             if closest_light:
                 print(str(datetime.now()), "Visible traffic light no", closest_light_index ,"at distance:", closest_distance)
                 try:
-                    state = self.get_light_state(light)
+                    state = self.get_light_state(closest_light)
                 except:
                     state = TrafficLight.UNKNOWN
 
