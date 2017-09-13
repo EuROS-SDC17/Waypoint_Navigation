@@ -205,8 +205,8 @@ class TLDetector(object):
 
         # Using tranform and rotation to calculate 2D position of light in image
         # based on http://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
-		# https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
-		# https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
+        # https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
+        # https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
 
         rvec, _ = cv2.Rodrigues(np.identity(3)) # Rotation vector : no need because the camera is calibrated
         tvec = rvec.copy() # Translation vector : no need because the camera is centered
@@ -251,7 +251,13 @@ class TLDetector(object):
         self.camera_image.encoding = "rgb8"
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
+        image_height = cv_image.shape[0]
+        image_width  = cv_image.shape[1]
+        self.config['camera_info']['image_width'] = image_width
+        self.config['camera_info']['image_height'] = image_height
+
         x, y = self.project_to_image_plane(light.pose.pose.position)
+
 
         cv2.circle(cv_image, (x, y), 15, (0,0,255), -1)
         cv2.imshow('image', cv_image)
