@@ -213,26 +213,18 @@ class TLDetector(object):
         cx = float(image_width/2.0)
         cy = float(image_height/2.0)
 
-        # Deriving roll, pitch and yaw from car's position expressed in quaterions
-        q_x = self.pose.pose.orientation.x
-        q_y = self.pose.pose.orientation.y
-        q_z = self.pose.pose.orientation.z
-        q_w = self.pose.pose.orientation.w
-
         # Deriving our target position in space
         target_x = point_in_world[0]
         target_y = point_in_world[1]
         try:
             target_z = point_in_world[2]
         except:
-            target_z = 0
+            target_z = 1.2
 
-        # Note that yaw is expressed in degrees
-        self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(q_x, q_y, q_z, q_w)
         # Get transform between pose of camera and world frame
         trans = None
         try:
-            latency = 1.0
+            latency = 0.0
             now = rospy.Time.now()
             self.listener.waitForTransform("/base_link",
                   "/world", now, rospy.Duration(1.0))
@@ -249,11 +241,9 @@ class TLDetector(object):
 
             x, y, z = (projection[1], projection[2], projection[0])
 
-            print("projection:", x, y, z)
-
             # Project to image coordinates
-            u = int(fx * x / z + cx)
-            v = int(fy * y / z + cy)
+            u = int((-fx * (x / z) * image_width + cx))
+            v = int((-fy * (y / z) * image_height + cy))
 
             print(str(datetime.now()), "Traffic light position on screen: ", u, v)
             return (u, v)
@@ -292,16 +282,21 @@ class TLDetector(object):
         self.config['camera_info']['image_height'] = image_height
 
         x, y = self.project_to_image_plane(light)
-        print(x,y)
-        cv2.rectangle(cv_image, (x - 100, y - 100), (x + 100, y + 300), (0, 0, 255), 2)
 
-        cv2.imshow('image', cv_image)
+        min_x = max(x - 100, 0)
+        max_x = min(x + 100, image_width-1)
+        min_y = max(y - 100, 0)
+        max_y = min(y + 300, image_height-1)
+
+
+        #cv2.rectangle(cv_image, (min_x, min_y), (max_x, max_y), (0, 0, 255), 2)
+        cv2.imshow('image', cv_image[min_y:max_y, min_x:max_x])
         cv2.waitKey(1)
 
         #TODO use light location to zoom in on traffic light in image
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        return self.light_classifier.get_classification(cv_image[min_y:max_y, min_x:max_x])
 
     def process_traffic_lights(self, debugging=True):
         """Finds closest visible traffic light, if one exists, and determines its
