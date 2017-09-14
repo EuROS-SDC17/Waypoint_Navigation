@@ -57,6 +57,7 @@ class TLDetector(object):
 
         self.waypoints_tree = None
         self.traffic_lights_tree = None
+        self.light_states = {0: "RED", 1:"YELLOW", 2:"GREEN", 4:"UNKNOWN"}
 
         rospy.spin()
 
@@ -366,9 +367,11 @@ class TLDetector(object):
                 # the topic is incorporated in self.lights whose x,y,z positions are
                 # in light.pose.pose.position
                 if self.lights and debugging:
-                    print(str(datetime.now()), "Detected traffic light state is:", state, "Ground truth state is:", self.lights[closest_light_index].state)
+                    true_state = self.lights[closest_light_index].state
+                    print(str(datetime.now()), "Detected traffic light state is:", self.light_states[state],
+                          "Ground truth state is:", self.light_states[true_state])
                 else:
-                    print(str(datetime.now()), "Detected traffic light state is:", state)
+                    print(str(datetime.now()), "Detected traffic light state is:", self.light_states[state])
 
                 return closest_light_wp, state
             else:
