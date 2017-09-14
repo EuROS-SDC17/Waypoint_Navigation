@@ -155,7 +155,7 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        index_closest_waypoint = self.waypoints_tree.query([(pose.position.x, pose.position.y)])[1][0]
+        index_closest_waypoint = self.waypoints_tree.query([pose])[1][0]
         return index_closest_waypoint
 
     def project_to_image_plane(self, point_in_world):
@@ -179,14 +179,22 @@ class TLDetector(object):
         image_height = self.config['camera_info']['image_height']
 
         # Principal x,y points that are at the image center
-        cx = int(image_width/2.0)
-        cy = int(image_height/2.0)
+        cx = float(image_width/2.0)
+        cy = float(image_height/2.0)
 
         # Deriving roll, pitch and yaw from car's position expressed in quaterions
         q_x = self.pose.pose.orientation.x
         q_y = self.pose.pose.orientation.y
         q_z = self.pose.pose.orientation.z
         q_w = self.pose.pose.orientation.w
+
+        # Deriving our target position in space
+        target_x = point_in_world[0]
+        target_y = point_in_world[1]
+        try:
+            target_z = point_in_world[2]
+        except:
+            target_z = 0
 
         # Note that yaw is expressed in degrees
         self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(q_x, q_y, q_z, q_w)
@@ -208,6 +216,10 @@ class TLDetector(object):
         # https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
         # https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
 
+        #print(rot, trans)
+        #print(target_x, target_y, target_z)
+        #print(self.car_x, self.car_y, self.car_z, self.yaw)
+
         rvec, _ = cv2.Rodrigues(np.identity(3)) # Rotation vector : no need because the camera is calibrated
         tvec = rvec.copy() # Translation vector : no need because the camera is centered
 
@@ -215,15 +227,11 @@ class TLDetector(object):
                                  [ 0, fy, cy],
                                  [ 0,  0,  1]], dtype=np.float32)
 
-        # Deriving our target position in space
-        target_x = point_in_world.x
-        target_y = point_in_world.y
-        target_z = point_in_world.z
 
         # Rotating target position in respect of our car yaw and car position
         rotated_x, rotated_y = self.clockwise_rotation(target_x, target_y, self.car_x, self.car_y, self.yaw)
 
-        objectPoints = np.array([[rotated_x, rotated_y, target_z]], dtype=np.float32)
+        objectPoints = np.array([[rotated_x, rotated_y, 0.0]], dtype=np.float32)
 
         imagePoints, jacobian = cv2.projectPoints(objectPoints, rvec, tvec, cameraMatrix, distCoeffs = None, aspectRatio=0)
 
@@ -256,7 +264,7 @@ class TLDetector(object):
         self.config['camera_info']['image_width'] = image_width
         self.config['camera_info']['image_height'] = image_height
 
-        x, y = self.project_to_image_plane(light.pose.pose.position)
+        x, y = self.project_to_image_plane(light)
 
 
         cv2.circle(cv_image, (x, y), 15, (0,0,255), -1)
@@ -268,7 +276,7 @@ class TLDetector(object):
         #Get classification
         return self.light_classifier.get_classification(cv_image)
 
-    def process_traffic_lights(self):
+    def process_traffic_lights(self, debugging=True):
         """Finds closest visible traffic light, if one exists, and determines its
             location and color
 
@@ -288,7 +296,7 @@ class TLDetector(object):
             self.waypoints_array = np.array([(waypoint.pose.pose.position.x, waypoint.pose.pose.position.y)
                                               for waypoint in self.waypoints.waypoints])
             self.waypoints_tree = KDTree(self.waypoints_array)
-            car_position = self.get_closest_waypoint(self.pose.pose)
+            car_position = self.get_closest_waypoint((self.car_x, self.car_y))
 
             # Finds the closest traffic light by comparing waypoints
             closest_distance = MAX_DISTANCE
@@ -296,8 +304,14 @@ class TLDetector(object):
             closest_light_wp = None
             closest_light_index = None
 
-            for k, light in enumerate(self.lights):
-                light_wp = self.get_closest_waypoint(light.pose.pose)
+            # Depending if we are debugging or not, we can get the traffic light location
+            # from the topic /vehicle/traffic_lights which is the ground truth
+            # the topic is incorporated in self.lights whose x,y,z positions are
+            # in light.pose.pose.position
+
+            for k, light in enumerate(config['light_positions']):
+                print (light)
+                light_wp = self.get_closest_waypoint(light)
                 distance = light_wp - car_position
                 # Updating the closest light to the one being processed
                 # Ignore traffic lights that are behind us
@@ -311,8 +325,9 @@ class TLDetector(object):
 
             if closest_light:
                 print(str(datetime.now()), "Visible traffic light no", closest_light_index ,"at distance:", closest_distance)
+                state = self.get_light_state(closest_light)
                 try:
-                    state = self.get_light_state(closest_light)
+                    pass
                 except:
                     state = TrafficLight.UNKNOWN
 
@@ -320,6 +335,12 @@ class TLDetector(object):
                 return closest_light_wp, state
             else:
                 return -1, TrafficLight.UNKNOWN
+
+
+            #if closest_light:
+            #    +            state = closest_light.state  # Temporary use the state from the simulator
+            #+
+            #return closest_light_wp, state
 
 if __name__ == '__main__':
     try:
