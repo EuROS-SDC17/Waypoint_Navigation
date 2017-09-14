@@ -229,49 +229,43 @@ class TLDetector(object):
 
         # Note that yaw is expressed in degrees
         self.roll, self.pitch, self.yaw = self.Quaternion_toEulerianAngle(q_x, q_y, q_z, q_w)
-
         # Get transform between pose of camera and world frame
         trans = None
         try:
+            latency = 1.0
             now = rospy.Time.now()
             self.listener.waitForTransform("/base_link",
                   "/world", now, rospy.Duration(1.0))
             (trans, rot) = self.listener.lookupTransform("/base_link",
-                  "/world", now)
+                  "/world", (now - rospy.Duration(latency)))
+
+            tvec = tf.transformations.translation_matrix(trans)
+            rvec = tf.transformations.quaternion_matrix(rot)
+            homogeneous_coords = np.array([target_x, target_y, target_z, 1.0])
+
+            # Combine all matrices
+            camera_matrix = tf.transformations.concatenate_matrices(tvec, rvec)
+            projection = camera_matrix.dot(homogeneous_coords)
+
+            x, y, z = (projection[1], projection[2], projection[0])
+
+            print("projection:", x, y, z)
+
+            # Project to image coordinates
+            u = int(fx * x / z + cx)
+            v = int(fy * y / z + cy)
+
+            print(str(datetime.now()), "Traffic light position on screen: ", u, v)
+            return (u, v)
 
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
+            return(int(cx), int(cy))
 
         # Using tranform and rotation to calculate 2D position of light in image
         # based on http://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
         # https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
         # https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
-
-        #print(rot, trans)
-        #print(target_x, target_y, target_z)
-        #print(self.car_x, self.car_y, self.car_z, self.yaw)
-
-        rvec, _ = cv2.Rodrigues(np.identity(3)) # Rotation vector : no need because the camera is calibrated
-        tvec = rvec.copy() # Translation vector : no need because the camera is centered
-
-        cameraMatrix = np.array([[fx,  0, cx],
-                                 [ 0, fy, cy],
-                                 [ 0,  0,  1]], dtype=np.float32)
-
-
-        # Rotating target position in respect of our car yaw and car position
-        rotated_x, rotated_y = self.clockwise_rotation(target_x, target_y, self.car_x, self.car_y, self.yaw)
-
-        objectPoints = np.array([[rotated_x, rotated_y, 0.0]], dtype=np.float32)
-
-        imagePoints, jacobian = cv2.projectPoints(objectPoints, rvec, tvec, cameraMatrix, distCoeffs = None, aspectRatio=0)
-
-        x = int(imagePoints[0][0][0])
-        y = int(imagePoints[0][0][1])
-
-        print(str(datetime.now()), "Traffic light position on screen: ",x,y)
-
-        return (x, y)
 
     def get_light_state(self, light):
         """Determines the current color of the traffic light
@@ -292,13 +286,15 @@ class TLDetector(object):
 
         image_height = cv_image.shape[0]
         image_width  = cv_image.shape[1]
+
+        # Updating our config information
         self.config['camera_info']['image_width'] = image_width
         self.config['camera_info']['image_height'] = image_height
 
         x, y = self.project_to_image_plane(light)
+        print(x,y)
+        cv2.rectangle(cv_image, (x - 100, y - 100), (x + 100, y + 300), (0, 0, 255), 2)
 
-
-        cv2.circle(cv_image, (x, y), 15, (0,0,255), -1)
         cv2.imshow('image', cv_image)
         cv2.waitKey(1)
 
