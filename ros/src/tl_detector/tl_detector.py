@@ -324,7 +324,7 @@ class TLDetector(object):
 
         if not self.traffic_lights_tree:
             if self.lights:
-                lights_array = np.array([(position.x, position.y) for position in self.lights.pose.pose.position])
+                lights_array = np.array([(light.pose.pose.position.x, light.pose.pose.position.y) for light in self.lights])
             else:
                 lights_array = np.array([(x, y) for x,y in config['light_positions']])
             self.traffic_lights_tree = KDTree(lights_array)
@@ -348,7 +348,7 @@ class TLDetector(object):
             closest_light_index, closest_light_wp, closest_distance = self.get_closest_traffic_light(pose, car_position)
             if closest_distance < MAX_DISTANCE:
                 if self.lights:
-                    closest_light_position = self.lights.pose.pose.position[closest_light_index]
+                    closest_light_position = self.lights[closest_light_index].pose.pose.position
                     closest_light = [closest_light_position.x, closest_light_position.y, closest_light_position.z]
                 else:
                     closest_light = config['light_positions'][closest_light_index]
