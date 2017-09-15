@@ -32,11 +32,11 @@ class TLDetector(object):
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         '''
-        /vehicle/traffic_lights helps you acquire an accurate ground truth data source for the traffic light
-        classifier, providing the location and current color state of all traffic lights in the
-        simulator. This state can be used to generate classified images or subbed into your solution to
-        help you work on another single component of the node. This topic won't be available when
-        testing your solution in real life so don't rely on it in the final submission.
+        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and 
+        helps you acquire an accurate ground truth data source for the traffic light
+        classifier by sending the current color state of all traffic lights in the
+        simulator. When testing on the vehicle, the color state will not be available. You'll need to
+        rely on the position of the light and the camera image to predict it.
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
@@ -323,13 +323,16 @@ class TLDetector(object):
             self.waypoints_tree = KDTree(waypoints_array)
 
         if not self.traffic_lights_tree:
-            lights_array = np.array([(x, y) for x,y in config['light_positions']])
+            if self.lights:
+                lights_array = np.array([(position.x, position.y) for position in self.lights.pose.pose.position])
+            else:
+                lights_array = np.array([(x, y) for x,y in config['light_positions']])
             self.traffic_lights_tree = KDTree(lights_array)
             self.no_lights = len(config['light_positions'])
 
         # If we are receiving car's position, we can also process traffic lights
 
-        if(self.pose):
+        if self.pose:
 
             # Record car's x,y,z position
             self.car_x = self.pose.pose.position.x
@@ -342,21 +345,25 @@ class TLDetector(object):
             print (str(datetime.now()), "Car position:", car_position)
 
             # Finding the closest traffic light by comparing waypoints
-
             closest_light_index, closest_light_wp, closest_distance = self.get_closest_traffic_light(pose, car_position)
             if closest_distance < MAX_DISTANCE:
-                closest_light = config['light_positions'][closest_light_index]
+                if self.lights:
+                    closest_light_position = self.lights.pose.pose.position[closest_light_index]
+                    closest_light = [closest_light_position.x, closest_light_position.y, closest_light_position.z]
+                else:
+                    closest_light = config['light_positions'][closest_light_index]
             else:
                 closest_light = None
 
             if closest_light:
-                print(str(datetime.now()), "Detected traffic light no", closest_light_index ,"at distance:", closest_distance)
+                print(str(datetime.now()), "Detected traffic light no", closest_light_index,
+                      "at distance:", closest_distance)
                 state = self.get_light_state(closest_light)
 
                 # Depending if we are debugging or not, we can get the traffic light location
                 # from the topic /vehicle/traffic_lights which is the ground truth
                 # the topic is incorporated in self.lights whose x,y,z positions are
-                # in light.pose.pose.position
+                # in self.lights.pose.pose.position
                 if self.lights and debugging:
                     true_state = self.lights[closest_light_index].state
                     print(str(datetime.now()), "Detected traffic light state is:", self.light_states[state],
