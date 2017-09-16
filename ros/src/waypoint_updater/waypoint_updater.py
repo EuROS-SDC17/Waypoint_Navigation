@@ -43,6 +43,8 @@ class WaypointUpdater(object):
         self.cte_pub = rospy.Publisher('cte', CTE, queue_size=1)
 
         self.search_range = int(rospy.get_param('~search_range'))
+        self.nearest_waypoint_display_interval = int(rospy.get_param('~nearest_waypoint_info_interval', 1))
+        self.nearest_waypoint_display_count = 0
 
         self.previous_closest_wp_index = None
         self.position = None
@@ -241,11 +243,12 @@ class WaypointUpdater(object):
         v1 = self.make_vector(p, a)
         v2 = self.make_vector(b, a)
         cos = (v1.x*v2.x+v1.y*v2.y+v1.z*v2.z) / self.distance(a,b)
+        sgn = 1 if v1.x*v2.y-v1.y*v2.x>0 else -1
         if da<cos:
             rospy.logerror("ERROR in distance from line p={0} a={1} b={2}".format(p,a,b))
             return 0.
         else:
-            return math.sqrt(da*da-cos*cos)
+            return math.sqrt(da*da-cos*cos)*sgn
 
     def prepare_waypoints(self):
         """
@@ -257,7 +260,14 @@ class WaypointUpdater(object):
         :return: LOOKAHEAD_WPS number of waypoints laying ahead of the vehicle, starting with the nearest
         """
         i = self.find_nearest_waypoint_index_ahead()
-        rospy.loginfo("nearest waypoint for position {0} index = {1} of {2}".format(\
+
+        if self.nearest_waypoint_display_count == 0:
+            rospy.loginfo("nearest waypoint {0} of {1}".format(\
+                    i, 0 if self.base_waypoints is None else len(self.base_waypoints)))
+        self.nearest_waypoint_display_count = (self.nearest_waypoint_display_count+1) % \
+                self.nearest_waypoint_display_interval
+
+        rospy.logdebug("nearest waypoint for position {0} index = {1} of {2}".format(\
                 self.position, i, \
                 0 if self.base_waypoints is None else len(self.base_waypoints)))
         if i == -1:

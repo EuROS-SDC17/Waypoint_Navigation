@@ -4,6 +4,7 @@
     <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater"/>
 -->
     <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater" output="screen">
-      <param name="search_range" value="20"/>
+      <param name="search_range" value="20" />
+      <param name="nearest_waypoint_info_interval" value="100" />
     </node>
 </launch>
