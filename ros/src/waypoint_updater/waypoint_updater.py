@@ -2,7 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped, Point
-from styx_msgs.msg import Lane, Waypoint
+from styx_msgs.msg import Lane, Waypoint, CTE
 
 import tf
 
@@ -40,6 +40,7 @@ class WaypointUpdater(object):
         rospy.Subscriber('/obstacle_waypoint', Waypoint, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
+        self.cte_pub = rospy.Publisher('cte', CTE, queue_size=1)
 
         self.search_range = int(rospy.get_param('~search_range'))
 
@@ -64,14 +65,17 @@ class WaypointUpdater(object):
         yaw = tf.transformations.euler_from_quaternion([orient.x, orient.y, orient.z, orient.w])[2]
         self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
 
-        final_waypoints = self.prepare_waypoints()
+        final_waypoints, cte = self.prepare_waypoints()
         rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
 
         if not final_waypoints:
            return
-        msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
 
-        self.final_waypoints_pub.publish(msg)
+        final_wp_msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
+        cte_msg = self.make_cte_message(msg.header.frame_id, cte)
+
+        self.final_waypoints_pub.publish(final_wp_msg)
+        self.cte_pub.publish(cte_msg)
 
 
     def waypoints_cb(self, msg):
@@ -163,25 +167,34 @@ class WaypointUpdater(object):
         min_index = -1
 
         if self.previous_closest_wp_index is None:
-            dist_decreased = False
-            prev_dist = None
             candidate_index = None
-            # NOTE this is a somewhat approximate but faster version
-            # will fail if there are different sections of the track
-            # that are very close. If we don't do this very often
-            # we could afford to do a full scan
             for index,waypoint in enumerate(self.base_waypoints):
                 wp = waypoint.pose.pose.position
                 distance = self.distance(self.position, wp)
-                if (prev_dist is not None) and (distance>prev_dist) and (dist_decreased):
-                    break
-                candidate_index = index
-                if (prev_dist is not None) and (distance<prev_dist):
-                    dist_decreased = True
-                prev_dist = distance
+                if distance < min_distance:
+                    min_distance = distance
+                    candidate_index = index
+            # NOTE below is a somewhat approximate but faster version
+            # will fail if there are different sections of the track
+            # that are very close. If we don't do this very often
+            # we could afford to do a full scan
+            # dist_decreased = False
+            # prev_dist = None
+            # candidate_index = None
+            # for index,waypoint in enumerate(self.base_waypoints):
+            #     wp = waypoint.pose.pose.position
+            #     distance = self.distance(self.position, wp)
+            #     if (prev_dist is not None) and (distance>prev_dist) and (dist_decreased):
+            #         break
+            #     candidate_index = index
+            #     if (prev_dist is not None) and (distance<prev_dist):
+            #         dist_decreased = True
+            #     prev_dist = distance
         else:
             candidate_index = self.previous_closest_wp_index
 
+        min_distance = 1E6
+        min_index = -1
         for index in range(candidate_index-self.search_range,candidate_index+self.search_range+1):
             wp = self.base_waypoints[index % len(self.base_waypoints)].pose.pose.position
             # get direction from vehicle to waypoint
@@ -223,6 +236,17 @@ class WaypointUpdater(object):
         zdiff = a.z - b.z
         return math.sqrt(xdiff*xdiff + ydiff*ydiff + zdiff*zdiff)
 
+    def distance_from_line(self, p, a, b):
+        da = self.distance(p, a)
+        v1 = self.make_vector(p, a)
+        v2 = self.make_vector(b, a)
+        cos = (v1.x*v2.x+v1.y*v2.y+v1.z*v2.z) / self.distance(a,b)
+        if da<cos:
+            rospy.logerror("ERROR in distance from line p={0} a={1} b={2}".format(p,a,b))
+            return 0.
+        else:
+            return math.sqrt(da*da-cos*cos)
+
     def prepare_waypoints(self):
         """
         Prepares a list of nearest LOOKAHEAD_WPS waypoints laying ahead of vehicle
@@ -236,9 +260,8 @@ class WaypointUpdater(object):
         rospy.loginfo("nearest waypoint for position {0} index = {1} of {2}".format(\
                 self.position, i, \
                 0 if self.base_waypoints is None else len(self.base_waypoints)))
-        return []
         if i == -1:
-            return []
+            return [], 1E6
         # now decide which way to go
         prev_i = i - 1
         next_i = i + 1
@@ -255,6 +278,8 @@ class WaypointUpdater(object):
             # if orientation with next waypoint doesn't match, we need to scan backwards
             scan_direction = -1;
 
+        # TODO Peter: why is this i+scan_direction? shouldn't
+        # the closest point ahead also be included?
         j = i + scan_direction
         result = []
         for count in range(0, LOOKAHEAD_WPS):
@@ -267,7 +292,17 @@ class WaypointUpdater(object):
             self.set_waypoint_velocity(self.base_waypoints, j, DEFAULT_VELOCITY)
             waypoint = self.base_waypoints[j]
             result.append(waypoint)
-        return result
+        cte = self.distance_from_line(self.position, \
+                self.base_waypoints[i].pose.pose.position, \
+                self.base_waypoints[(i-scan_direction) % len(self.base_waypoints)].pose.pose.position)
+        return result, cte
+
+    def make_cte_message(self, frame_id, cte):
+        msg = CTE()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = frame_id
+        msg.cte = cte
+        return msg
 
     def make_waypoints_message(self, frame_id, waypoints):
         """
