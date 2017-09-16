@@ -292,6 +292,7 @@ class WaypointUpdater(object):
             self.set_waypoint_velocity(self.base_waypoints, j, DEFAULT_VELOCITY)
             waypoint = self.base_waypoints[j]
             result.append(waypoint)
+        # TODO CTE should be based on final waypoints, not base_waypoints
         cte = self.distance_from_line(self.position, \
                 self.base_waypoints[i].pose.pose.position, \
                 self.base_waypoints[(i-scan_direction) % len(self.base_waypoints)].pose.pose.position)
