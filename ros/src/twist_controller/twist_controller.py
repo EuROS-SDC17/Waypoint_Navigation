@@ -1,4 +1,6 @@
+import rospy
 from pid import PID
+from lowpass import LowPassFilter
 
 GAS_DENSITY = 2.858
 ONE_MPH = 0.44704
@@ -15,7 +17,14 @@ class Controller(object):
         :param kwargs: TODO
         """
         self.last_update = 0
-        self.steer_pid = PID(.4,5e-6,1, mn=-1.5, mx=1.5)
+        self.max_velocity = 30
+
+        self.steer_pid = PID(.4,0,2, mn=-1.5, mx=1.5)
+        self.steer_lowpass = LowPassFilter(4e-2)
+        self.throttle_pid = PID(1.,0.,1., mn=0, mx=1)
+        self.throttle_lowpass = LowPassFilter(1e-1)
+        self.brake_pid = PID(1.,0.,1.,mn=0,mx=1)
+        self.brake_lowpass = LowPassFilter(1e-1)
 
     def reset(self, time, cte):
         """
@@ -23,6 +32,11 @@ class Controller(object):
         """
         self.last_update = time
         self.steer_pid.reset()
+        self.steer_lowpass.reset()
+        self.brake_pid.reset()
+        self.brake_lowpass.reset()
+        self.throttle_pid.reset()
+        self.throttle_lowpass.reset()
 
     def control(self, timestamp, target_velocity, current_velocity, cte):
         """
@@ -31,15 +45,34 @@ class Controller(object):
         :param kwargs: TODO
         :return: throttle, brake, steering angle
         """
-        if current_velocity > target_velocity*1.1:
-            throttle = 0
-        elif current_velocity > target_velocity:
-            throttle = 0.4
-        elif current_velocity > target_velocity*0.8:
-            throttle = 0.7
+        t_delta = timestamp-self.last_update
+        if cte>0:
+            cte = max(0., cte-0.2)
+        elif cte<0:
+            cte = min(0., cte+0.2)
+
+        if target_velocity > 0:
+            throttle = self.throttle_pid.step(\
+                    (target_velocity-current_velocity)/self.max_velocity, t_delta)
+            throttle *= max(5.,current_velocity)*self.max_velocity
         else:
-            throttle = 1.
-        steer = self.steer_pid.step(cte, timestamp-self.last_update)
-        self.last_update=timestamp
-        return throttle, 0., steer
+            throttle = 0
+
+        if current_velocity > target_velocity:
+            brake = self.brake_pid.step(\
+                    (current_velocity-target_velocity)/self.max_velocity, t_delta)
+            brake *= current_velocity*self.max_velocity
+            brake = min(10, brake)
+        else:
+            brake = 0
+
+        steer = self.steer_pid.step(cte, t_delta)
+
+        rospy.loginfo("thr {:.2f} brake {:.2f} steer {:.2f}".format(throttle, brake, steer))
+
+        self.last_update = timestamp
+        # return throttle, 0., steer
+        return self.throttle_lowpass.filt(throttle, t_delta), \
+                self.brake_lowpass.filt(brake, t_delta)*100, \
+                self.steer_lowpass.filt(steer/(current_velocity+0.01), t_delta)*10
 
