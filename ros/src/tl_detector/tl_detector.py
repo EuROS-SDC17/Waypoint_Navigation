@@ -296,7 +296,7 @@ class TLDetector(object):
         #TODO use light location to zoom in on traffic light in image
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image[min_y:max_y, min_x:max_x])
+        return self.light_classifier.get_classification_by_HSV(cv_image[min_y:max_y, min_x:max_x])
 
     def process_traffic_lights(self, debugging=True):
         """Finds closest visible traffic light, if one exists, and determines its
