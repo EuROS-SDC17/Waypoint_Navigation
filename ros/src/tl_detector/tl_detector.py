@@ -7,6 +7,7 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifier
+from light_classification.tl_classifier_cnn import CNNTLClassifier
 import tf
 import cv2
 from traffic_light_config import config
@@ -32,7 +33,7 @@ class TLDetector(object):
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         '''
-        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and 
+        /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
         helps you acquire an accurate ground truth data source for the traffic light
         classifier by sending the current color state of all traffic lights in the
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
@@ -48,6 +49,7 @@ class TLDetector(object):
 
         self.bridge = CvBridge()
         self.light_classifier = TLClassifier()
+        self.light_classifier_cnn = CNNTLClassifier()
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -257,7 +259,7 @@ class TLDetector(object):
         # https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
         # https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
 
-    def get_light_state(self, light):
+    def get_light_state(self, light, ground_truth=None):
         """Determines the current color of the traffic light
 
         Args:
@@ -296,7 +298,20 @@ class TLDetector(object):
         #TODO use light location to zoom in on traffic light in image
 
         #Get classification
-        return self.light_classifier.get_classification_by_HSV(cv_image[min_y:max_y, min_x:max_x])
+        state_hsv = self.light_classifier.get_classification(cv_image[min_y:max_y, min_x:max_x])
+        state_cnn = self.light_classifier_cnn.get_classification(cv_image)
+
+        if self.lights and ground_truth:
+            print(str(datetime.now()),
+                  "HSV Detected traffic light state is:", self.light_states[state_hsv],
+                  "CNN Detected traffic light state is:", self.light_states[state_cnn],
+                  "Ground truth state is:", self.light_states[ground_truth])
+        else:
+            print(str(datetime.now()),
+                  "HSV Detected traffic light state is:", self.light_states[state_hsv],
+                  "CNN Detected traffic light state is:", self.light_states[state_cnn])
+
+        return state_cnn
 
     def process_traffic_lights(self, debugging=True):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -358,18 +373,14 @@ class TLDetector(object):
             if closest_light:
                 print(str(datetime.now()), "Detected traffic light no", closest_light_index,
                       "at distance:", closest_distance)
-                state = self.get_light_state(closest_light)
-
                 # Depending if we are debugging or not, we can get the traffic light location
                 # from the topic /vehicle/traffic_lights which is the ground truth
                 # the topic is incorporated in self.lights whose x,y,z positions are
                 # in self.lights.pose.pose.position
                 if self.lights and debugging:
-                    true_state = self.lights[closest_light_index].state
-                    print(str(datetime.now()), "Detected traffic light state is:", self.light_states[state],
-                          "Ground truth state is:", self.light_states[true_state])
+                    state = self.get_light_state(closest_light, self.lights[closest_light_index].state)
                 else:
-                    print(str(datetime.now()), "Detected traffic light state is:", self.light_states[state])
+                    state = self.get_light_state(closest_light)
 
                 return closest_light_wp, state
             else:

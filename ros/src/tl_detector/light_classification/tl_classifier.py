@@ -8,9 +8,6 @@ class TLClassifier(object):
         pass
 
     def get_classification(self, image):
-        return TrafficLight.UNKNOWN
-
-    def get_classification_by_HSV(self, image):
         """Determines the color of the traffic light in the image
 
         Args:
@@ -86,4 +83,3 @@ class TLClassifier(object):
         else:
             # if everything fails
             return TrafficLight.UNKNOWN
-
