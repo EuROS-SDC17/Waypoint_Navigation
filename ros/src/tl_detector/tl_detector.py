@@ -267,25 +267,25 @@ class TLDetector(object):
         if(self.pose):
             car_position = self.get_closest_waypoint(self.pose.pose)
 
-        # Finds the closest traffic light by comparing waypoints
-        closest_distance = MAX_DISTANCE
-        closest_light = None
-        closest_light_wp = None
+            # Finds the closest traffic light by comparing waypoints
+            closest_distance = MAX_DISTANCE
+            closest_light = None
+            closest_light_wp = None
 
-        for light in self.lights:
-            light_wp = self.get_closest_waypoint(light.pose.pose)
-            distance = light_wp - car_position
+            for light in self.lights:
+                light_wp = self.get_closest_waypoint(light.pose.pose)
+                distance = light_wp - car_position
 
-            # Ignore traffic lights that are behind us
-            if (distance < closest_distance and distance > 0):
-                closest_distance = distance
-                closest_light = light
-                closest_light_wp = light_wp
+                # Ignore traffic lights that are behind us
+                if (distance < closest_distance and distance > 0):
+                    closest_distance = distance
+                    closest_light = light
+                    closest_light_wp = light_wp
 
-        if closest_light:
-            state = closest_light.state  # Temporary use the state from the simulator
-            return closest_light_wp, state
-        self.waypoints = None
+            if closest_light:
+                state = closest_light.state  # Temporary use the state from the simulator
+                return closest_light_wp, state
+            self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
