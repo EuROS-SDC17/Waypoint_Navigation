@@ -20,7 +20,7 @@ class WaypointLoader(object):
     def __init__(self):
         rospy.init_node('waypoint_loader', log_level=rospy.DEBUG)
 
-        self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1)
+        self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1, latch=True)
 
         self.velocity = rospy.get_param('~velocity')
         self.publish_rate = rospy.get_param('~publish_rate')
@@ -52,11 +52,11 @@ class WaypointLoader(object):
                 p.pose.pose.position.y = float(wp['y'])
                 p.pose.pose.position.z = float(wp['z'])
 
-                # NOTE: Commented out Udacity's code below. The unit for yaw 
+                # NOTE: Commented out Udacity's code below. The unit for yaw
                 # is inconsistent with wp_yaw_const.txt in Udacity's version.
                 # If Udacity does not update the file to unify their use
                 # of radian vs. degree we should do the conversion ourselves.
-                # Also note that in the real test track the yaw is in 
+                # Also note that in the real test track the yaw is in
                 # radians in the track waypoint file.
                 q = self.quaternion_from_yaw(float(wp['yaw'])/180*math.pi)
                 p.pose.pose.orientation = Quaternion(*q)
@@ -84,15 +84,11 @@ class WaypointLoader(object):
         return waypoints
 
     def publish(self, waypoints):
-        # NOTE: check that this new rate is sufficient
-        rate = rospy.Rate(self.publish_rate)
-        while not rospy.is_shutdown():
-            lane = Lane()
-            lane.header.frame_id = '/world'
-            lane.header.stamp = rospy.Time(0)
-            lane.waypoints = waypoints
-            self.pub.publish(lane)
-            rate.sleep()
+        lane = Lane()
+        lane.header.frame_id = '/world'
+        lane.header.stamp = rospy.Time(0)
+        lane.waypoints = waypoints
+        self.pub.publish(lane)
 
 
 if __name__ == '__main__':
