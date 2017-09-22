@@ -94,7 +94,10 @@ class WaypointUpdater(object):
         final_waypoints, cte = self.prepare_waypoints()
         rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
 
-        wp = final_waypoints[LOOKAHEAD_WPS - 1]
+        if not final_waypoints:
+           return
+
+        wp = final_waypoints[0]
         marker = Marker()
         marker.header.frame_id = "/world"
         marker.ns = "pose"
@@ -116,9 +119,6 @@ class WaypointUpdater(object):
 
         # Publish the nearest waypoint marker (green)
         self.vis_pub.publish(marker)
-
-        if not final_waypoints:
-           return
 
         final_wp_msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
         cte_msg = self.make_cte_message(msg.header.frame_id, cte)
