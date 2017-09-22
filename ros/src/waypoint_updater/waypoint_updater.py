@@ -2,6 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped, Point
+from std_msgs.msg import Int32
 from styx_msgs.msg import Lane, Waypoint, CTE
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -37,8 +38,8 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
 
-        rospy.Subscriber('/traffic_waypoint', Waypoint, self.traffic_cb)
-        rospy.Subscriber('/obstacle_waypoint', Waypoint, self.obstacle_cb)
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/obstacle_waypoint', Int32, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.cte_pub = rospy.Publisher('cte', CTE, queue_size=1)
@@ -53,8 +54,8 @@ class WaypointUpdater(object):
         self.position = None
         self.orientation = None
         self.base_waypoints = None
-        self.traffic_lights = None
-        self.obstacles = None
+        self.traffic_light = None
+        self.obstacle = None
         self.count = 0
 
         rospy.spin()
@@ -140,22 +141,22 @@ class WaypointUpdater(object):
     def traffic_cb(self, msg):
         """
         Callback for receiving traffic lights
-        :param msg:
+        :param msg: the index of the waypoint that is nearest to the upcoming red light
         """
         rospy.logdebug("received traffic light: {0}".format(msg))
 
         # TODO: Callback for /traffic_waypoint message. Implement
-        self.traffic_lights = msg
+        self.traffic_light = msg
 
     def obstacle_cb(self, msg):
         """
         Callback for receiving obstacle positions
-        :param msg:
+        :param msg: the index of the waypoint that is nearest to the upcoming obstacle
         """
         rospy.logdebug("received obstacle: {0}".format(msg))
 
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
-        self.obstacles = msg
+        self.obstacle = msg
 
     def get_waypoint_velocity(self, waypoint):
         """
