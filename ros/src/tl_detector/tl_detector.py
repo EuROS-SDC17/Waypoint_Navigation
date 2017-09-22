@@ -53,6 +53,7 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+        self.waypoints_tree = None
 
         rospy.spin()
 
@@ -167,8 +168,11 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        index_closest_waypoint = self.waypoints_tree.query([(pose.position.x, pose.position.y)])[1][0]
-        return index_closest_waypoint
+        if not self.waypoints_tree:
+            return -1
+        else:
+            return self.waypoints_tree.query([(pose.position.x, pose.position.y)])[1][0]
+
 
     def project_to_image_plane(self, point_in_world):
         """Project point from 3D world coordinates to 2D camera image location
