@@ -181,13 +181,11 @@ class WaypointUpdater(object):
         :param waypoints: list of all waypoints
         :param wp1: waypoint 1
         :param wp2: waypoint 2
-        :return:
+        :return: the total distance of the piecewise linear arc from wp1 to wp2
         """
         dist = 0
-        dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
-        for i in range(wp1, wp2+1):
-            dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
-            wp1 = i
+        for i in range(wp1, wp2):
+            dist += distance(waypoints[i].pose.pose.position, waypoints[i+1].pose.pose.position)
         return dist
 
     def make_vector(self, a, b):
