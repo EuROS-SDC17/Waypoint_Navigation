@@ -3,6 +3,7 @@
 import rospy
 from geometry_msgs.msg import PoseStamped, Point
 from styx_msgs.msg import Lane, Waypoint, CTE
+from visualization_msgs.msg import Marker, MarkerArray
 
 import tf
 
@@ -42,6 +43,8 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.cte_pub = rospy.Publisher('cte', CTE, queue_size=1)
 
+        self.vis_pub = rospy.Publisher('visualization_marker', Marker)
+        
         self.search_range = int(rospy.get_param('~search_range'))
         self.nearest_waypoint_display_interval = int(rospy.get_param('~nearest_waypoint_info_interval', 1))
         self.nearest_waypoint_display_count = 0
@@ -52,6 +55,7 @@ class WaypointUpdater(object):
         self.base_waypoints = None
         self.traffic_lights = None
         self.obstacles = None
+        self.count = 0
 
         rospy.spin()
 
@@ -63,12 +67,55 @@ class WaypointUpdater(object):
         rospy.logdebug("received pose: {0}".format(msg))
         self.position = msg.pose.position
 
+        marker = Marker()
+        marker.header.frame_id = "/world"
+        marker.ns = "pose"
+        marker.id = self.count
+        self.count += 1
+        marker.type = marker.CUBE
+        marker.action = marker.ADD
+        marker.scale.x = 10.
+        marker.scale.y = 10.
+        marker.scale.z = 10.
+        marker.color.a = 1.0
+        marker.color.r = 1.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = self.position.x
+        marker.pose.position.y = self.position.y
+        marker.pose.position.z = self.position.z
+        self.vis_pub.publish(marker)
+        
         orient = msg.pose.orientation
         yaw = tf.transformations.euler_from_quaternion([orient.x, orient.y, orient.z, orient.w])[2]
         self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
 
         final_waypoints, cte = self.prepare_waypoints()
         rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
+
+        wp = final_waypoints[LOOKAHEAD_WPS - 1]
+        marker = Marker()
+        marker.header.frame_id = "/world"
+        marker.ns = "pose"
+        marker.id = self.count
+        self.count += 1
+        marker.type = marker.SPHERE
+        marker.action = marker.ADD
+        marker.scale.x = 10.
+        marker.scale.y = 10.
+        marker.scale.z = 10.
+        marker.color.a = 1.0
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = wp.pose.pose.position.x
+        marker.pose.position.y = wp.pose.pose.position.y
+        marker.pose.position.z = wp.pose.pose.position.z
+
+        # Publish the nearest waypoint marker (green)
+        self.vis_pub.publish(marker)
 
         if not final_waypoints:
            return
