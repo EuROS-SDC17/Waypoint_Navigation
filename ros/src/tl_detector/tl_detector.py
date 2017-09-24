@@ -292,8 +292,8 @@ class TLDetector(object):
 
 
         #cv2.rectangle(cv_image, (min_x, min_y), (max_x, max_y), (0, 0, 255), 2)
-        cv2.imshow('image', cv_image[min_y:max_y, min_x:max_x])
-        cv2.waitKey(1)
+        #cv2.imshow('image', cv_image[min_y:max_y, min_x:max_x])
+        #cv2.waitKey(1)
 
         #TODO use light location to zoom in on traffic light in image
 
