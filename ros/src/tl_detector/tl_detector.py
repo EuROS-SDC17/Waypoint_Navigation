@@ -40,7 +40,6 @@ class TLDetector(object):
         rely on the position of the light and the camera image to predict it.
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
@@ -60,6 +59,8 @@ class TLDetector(object):
         self.waypoints_tree = None
         self.traffic_lights_tree = None
         self.light_states = {0: "RED", 1:"YELLOW", 2:"GREEN", 4:"UNKNOWN"}
+
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
         rospy.spin()
 
