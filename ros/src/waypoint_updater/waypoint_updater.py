@@ -6,9 +6,9 @@ from std_msgs.msg import Int32
 from styx_msgs.msg import Lane, Waypoint, CTE
 from visualization_msgs.msg import Marker, MarkerArray
 
+import math
 import tf
 
-import math
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -25,7 +25,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 10 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 50 # Number of waypoints we will publish. You can change this number
 DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 
 class WaypointUpdater(object):
@@ -44,7 +44,7 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.cte_pub = rospy.Publisher('cte', CTE, queue_size=1)
 
-        self.vis_pub = rospy.Publisher('visualization_marker', Marker)
+        self.vis_pub = rospy.Publisher('visualization_marker', Marker, queue_size=1)
         
         self.search_range = int(rospy.get_param('~search_range'))
         self.nearest_waypoint_display_interval = int(rospy.get_param('~nearest_waypoint_info_interval', 1))
@@ -58,7 +58,10 @@ class WaypointUpdater(object):
         self.obstacle = None
         self.count = 0
 
-        rospy.spin()
+        rate = rospy.Rate(10) # 10hz
+        while not rospy.is_shutdown():
+            self.update_waypoints()
+            rate.sleep()
 
     def pose_cb(self, msg):
         """
@@ -71,61 +74,27 @@ class WaypointUpdater(object):
         marker = Marker()
         marker.header.frame_id = "/world"
         marker.ns = "pose"
-        marker.id = self.count
+        marker.id = 0
         self.count += 1
         marker.type = marker.CUBE
         marker.action = marker.ADD
-        marker.scale.x = 10.
-        marker.scale.y = 10.
-        marker.scale.z = 10.
+        marker.scale.x = 5.
+        marker.scale.y = 2.
+        marker.scale.z = 1.
         marker.color.a = 1.0
         marker.color.r = 1.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
+        marker.color.g = 0.0
+        marker.color.b = 1.0
         marker.pose.orientation.w = 1.0
         marker.pose.position.x = self.position.x
         marker.pose.position.y = self.position.y
         marker.pose.position.z = self.position.z
+        # publish pose in purple
         self.vis_pub.publish(marker)
         
         orient = msg.pose.orientation
         yaw = tf.transformations.euler_from_quaternion([orient.x, orient.y, orient.z, orient.w])[2]
         self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
-
-        final_waypoints, cte = self.prepare_waypoints()
-        rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
-
-        if not final_waypoints:
-           return
-
-        wp = final_waypoints[0]
-        marker = Marker()
-        marker.header.frame_id = "/world"
-        marker.ns = "pose"
-        marker.id = self.count
-        self.count += 1
-        marker.type = marker.SPHERE
-        marker.action = marker.ADD
-        marker.scale.x = 10.
-        marker.scale.y = 10.
-        marker.scale.z = 10.
-        marker.color.a = 1.0
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
-        marker.pose.orientation.w = 1.0
-        marker.pose.position.x = wp.pose.pose.position.x
-        marker.pose.position.y = wp.pose.pose.position.y
-        marker.pose.position.z = wp.pose.pose.position.z
-
-        # Publish the nearest waypoint marker (green)
-        self.vis_pub.publish(marker)
-
-        final_wp_msg = self.make_waypoints_message(msg.header.frame_id, final_waypoints)
-        cte_msg = self.make_cte_message(msg.header.frame_id, cte)
-
-        self.final_waypoints_pub.publish(final_wp_msg)
-        self.cte_pub.publish(cte_msg)
 
 
     def waypoints_cb(self, msg):
@@ -138,6 +107,7 @@ class WaypointUpdater(object):
         if self.base_waypoints is None:
             self.base_waypoints = msg.waypoints
 
+
     def traffic_cb(self, msg):
         """
         Callback for receiving traffic lights
@@ -145,8 +115,39 @@ class WaypointUpdater(object):
         """
         rospy.logdebug("received traffic light: {0}".format(msg))
 
-        # TODO: Callback for /traffic_waypoint message. Implement
-        self.traffic_light = msg
+        index = msg.data
+        self.red_traffic_light_index = index
+
+        rospy.loginfo("nearest red traffic light at waypoint: {}".format(index))
+        marker = Marker()
+        marker.header.frame_id = "/world"
+        marker.ns = "traffic_light"
+        marker.id = 10e6
+        marker.type = marker.SPHERE
+
+        if index != -1 and self.base_waypoints:
+            marker.action = marker.ADD
+            marker.pose.position.x = self.base_waypoints[index].pose.pose.position.x
+            marker.pose.position.y = self.base_waypoints[index].pose.pose.position.y
+            marker.pose.position.z = self.base_waypoints[index].pose.pose.position.z
+        else:
+            marker.action = marker.DELETE
+            marker.pose.position.x = 0
+            marker.pose.position.y = 0
+            marker.pose.position.z = 0
+
+        marker.scale.x = 1.
+        marker.scale.y = 1.
+        marker.scale.z = 1.
+        marker.color.a = 1.0
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+        marker.pose.orientation.w = 1.0
+
+        # Publish the red traffic light marker (red)
+        self.vis_pub.publish(marker)
+
 
     def obstacle_cb(self, msg):
         """
@@ -186,7 +187,7 @@ class WaypointUpdater(object):
         """
         dist = 0
         for i in range(wp1, wp2):
-            dist += distance(waypoints[i].pose.pose.position, waypoints[i+1].pose.pose.position)
+            dist += self.distance(waypoints[i].pose.pose.position, waypoints[i+1].pose.pose.position)
         return dist
 
     def make_vector(self, a, b):
@@ -373,6 +374,42 @@ class WaypointUpdater(object):
         msg.header.frame_id = frame_id
         msg.waypoints = waypoints
         return msg
+
+    def update_waypoints(self):
+        final_waypoints, cte = self.prepare_waypoints()
+        rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
+
+        if not final_waypoints:
+           return
+
+        count = 10
+        for wp in final_waypoints:
+            marker = Marker()
+            marker.header.frame_id = "/world"
+            marker.ns = "waypoints"
+            marker.id = count
+            count += 1
+            marker.type = marker.SPHERE
+            marker.action = marker.ADD
+            marker.scale.x = 1.
+            marker.scale.y = 1.
+            marker.scale.z = 1.
+            marker.color.a = 1.0
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+            marker.pose.orientation.w = 1.0
+            marker.pose.position.x = wp.pose.pose.position.x
+            marker.pose.position.y = wp.pose.pose.position.y
+            marker.pose.position.z = wp.pose.pose.position.z
+            # Publish the nearest waypoint marker (blue)
+            self.vis_pub.publish(marker)
+
+        final_wp_msg = self.make_waypoints_message("/world", final_waypoints)
+        cte_msg = self.make_cte_message("/world", cte)
+
+        self.final_waypoints_pub.publish(final_wp_msg)
+        self.cte_pub.publish(cte_msg)
 
 if __name__ == '__main__':
     try:
