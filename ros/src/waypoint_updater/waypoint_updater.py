@@ -25,7 +25,13 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 50 # Number of waypoints we will publish. You can change this number
+def mph2kmph(mph):
+    return mph * 1.6093
+
+def kmph2mps(kmph):
+    return kmph / 3.6
+
+LOOKAHEAD_WPS = 30 # Number of waypoints we will publish. You can change this number
 DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 
 class WaypointUpdater(object):
@@ -56,7 +62,6 @@ class WaypointUpdater(object):
         self.base_waypoints = None
         self.traffic_light = None
         self.obstacle = None
-        self.count = 0
 
         rate = rospy.Rate(10) # 10hz
         while not rospy.is_shutdown():
@@ -75,7 +80,6 @@ class WaypointUpdater(object):
         marker.header.frame_id = "/world"
         marker.ns = "pose"
         marker.id = 0
-        self.count += 1
         marker.type = marker.CUBE
         marker.action = marker.ADD
         marker.scale.x = 5.
@@ -85,10 +89,13 @@ class WaypointUpdater(object):
         marker.color.r = 1.0
         marker.color.g = 0.0
         marker.color.b = 1.0
-        marker.pose.orientation.w = 1.0
-        marker.pose.position.x = self.position.x
-        marker.pose.position.y = self.position.y
-        marker.pose.position.z = self.position.z
+        marker.pose.orientation.x = msg.pose.orientation.x
+        marker.pose.orientation.y = msg.pose.orientation.y
+        marker.pose.orientation.z = msg.pose.orientation.z
+        marker.pose.orientation.w = msg.pose.orientation.w
+        marker.pose.position.x = msg.pose.position.x
+        marker.pose.position.y = msg.pose.position.y
+        marker.pose.position.z = msg.pose.position.z
         # publish pose in purple
         self.vis_pub.publish(marker)
         
@@ -118,7 +125,7 @@ class WaypointUpdater(object):
         index = msg.data
         self.red_traffic_light_index = index
 
-        rospy.loginfo("nearest red traffic light at waypoint: {}".format(index))
+        rospy.logdebug("nearest red traffic light at waypoint: {}".format(index))
         marker = Marker()
         marker.header.frame_id = "/world"
         marker.ns = "traffic_light"
@@ -244,7 +251,7 @@ class WaypointUpdater(object):
 
         min_distance = 1E6
         min_index = -1
-        for index in range(candidate_index-self.search_range,candidate_index+self.search_range+1):
+        for index in range(candidate_index-self.search_range, candidate_index+self.search_range+1):
             wp = self.base_waypoints[index % len(self.base_waypoints)].pose.pose.position
             # get direction from vehicle to waypoint
             direction = self.make_vector(self.position, wp)
@@ -260,6 +267,28 @@ class WaypointUpdater(object):
         rospy.logdebug("found nearest waypoint ahead: {0}".format(
                       self.base_waypoints[min_index].pose.pose.position))
         self.previous_closest_wp_index = min_index
+
+        wp = self.base_waypoints[min_index]
+        marker = Marker()
+        marker.header.frame_id = "/world"
+        marker.ns = "waypoints"
+        marker.id = 100
+        marker.type = marker.SPHERE
+        marker.action = marker.ADD
+        marker.scale.x = 1.
+        marker.scale.y = 1.
+        marker.scale.z = 1.
+        marker.color.a = 1.0
+        marker.color.r = 0.5
+        marker.color.g = 0.5
+        marker.color.b = 0.5
+        marker.pose.orientation.w = 1.0
+        marker.pose.position.x = wp.pose.pose.position.x
+        marker.pose.position.y = wp.pose.pose.position.y
+        marker.pose.position.z = wp.pose.pose.position.z
+        # Publish the nearest waypoint ahead marker (grey)
+        self.vis_pub.publish(marker)
+
         return min_index
 
     def is_matching_orientation(self, a, b):
@@ -319,36 +348,25 @@ class WaypointUpdater(object):
                 0 if self.base_waypoints is None else len(self.base_waypoints)))
         if i == -1:
             return [], 1E6
+
+
         # now decide which way to go
-        prev_i = i - 1
-        next_i = i + 1
-        if prev_i < 0:
-            prev_i = len(self.base_waypoints) - 1
-        if next_i >= len(self.base_waypoints):
-            next_i = 0
-        p_wb = self.base_waypoints[prev_i].pose.pose.position
+        next_i = (i + 1) % len(self.base_waypoints)
         n_wb = self.base_waypoints[next_i].pose.pose.position
-        prev_direction = self.make_vector(self.position, p_wb)
         next_direction = self.make_vector(self.position, n_wb)
         scan_direction = 1 # default direction is towards next waypoint in sequence
         if not self.is_matching_orientation(self.orientation, next_direction):
             # if orientation with next waypoint doesn't match, we need to scan backwards
             scan_direction = -1;
+        rospy.logdebug("scanning {}".format("forward" if scan_direction else "backward"))
 
-        # TODO Peter: why is this i+scan_direction? shouldn't
-        # the closest point ahead also be included?
-        j = i + scan_direction
         result = []
-        for count in range(0, LOOKAHEAD_WPS):
-            if scan_direction < 0 and j < 0:
-                # wrap to last index
-                j = len(self.base_waypoints) - 1
-            elif scan_direction > 0 and j >= len(self.base_waypoints):
-                # wrap to zero
-                j = 0;
-            self.set_waypoint_velocity(self.base_waypoints, j, DEFAULT_VELOCITY)
-            waypoint = self.base_waypoints[j]
+        for j in range(0, LOOKAHEAD_WPS):
+            index = (i + j*scan_direction) % len(self.base_waypoints)
+            self.set_waypoint_velocity(self.base_waypoints, index, kmph2mps(mph2kmph(DEFAULT_VELOCITY)))
+            waypoint = self.base_waypoints[index]
             result.append(waypoint)
+
         # TODO CTE should be based on final waypoints, not base_waypoints
         cte = self.distance_from_line(self.position, \
                 self.base_waypoints[i].pose.pose.position, \
