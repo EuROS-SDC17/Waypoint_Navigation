@@ -17,7 +17,6 @@ class CNNTLStateDetector(object):
                 serialized_graph = fid.read()
                 od_graph_def.ParseFromString(serialized_graph)
                 tf.import_graph_def(od_graph_def, name='')
-
                 self.detect_session = tf.Session()
 
         self.state_graph = tf.Graph()
@@ -32,7 +31,7 @@ class CNNTLStateDetector(object):
     def load_image_into_numpy_array(self, image):
         return image
 
-    def get_classification(self, image):
+    def get_classification(self, image, debug=False):
         """
         Determines the color of the traffic light in a
         cropped portion of the image
@@ -75,8 +74,9 @@ class CNNTLStateDetector(object):
                 end_y = int(boxes[0][i][3] * image_np.shape[1])
 
                 cut_image = image_np[start_x:end_x, start_y:end_y]
-                cv2.imshow('image', cut_image)
-                cv2.waitKey(1)
+                if debug:
+                    cv2.imshow('image', cut_image)
+                    cv2.waitKey(1)
 
                 result = self.state_session.run(
                     [self.out], feed_dict={self.input_layer: [cut_image],
