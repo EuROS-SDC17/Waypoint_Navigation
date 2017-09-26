@@ -4,7 +4,7 @@ import rospy
 from std_msgs.msg import Bool
 from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
 from geometry_msgs.msg import TwistStamped
-from styx_msgs.msg import CTE
+from styx_msgs.msg import Lane, CTE
 import math
 
 from twist_controller import Controller
@@ -60,6 +60,8 @@ class DBWNode(object):
 
         self.controller = Controller()
 
+        rospy.Subscriber('/final_waypoints', Lane, self.waypoints_cb)
+
         self.cte = 0.
         rospy.Subscriber('/cte', CTE, self.cte_cb)
         self.velocity = 0.
@@ -76,10 +78,13 @@ class DBWNode(object):
         self.dbw_enabled = False
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
 
-        self.last_speed_change = 0.
-        self.target_speed_index = 1
+        self.target_speed = 0.
 
         self.loop()
+
+    def waypoints_cb(self, msg):
+        if len(msg.waypoints):
+            self.target_speed = msg.waypoints[0].twist.twist.linear.x
 
     def vehicle_velocity_cb(self, msg):
         self.velocity = msg.twist.linear.x
@@ -91,20 +96,15 @@ class DBWNode(object):
         """
         Main loop that periodically controls the vehicle
         """
+        # TODO doesn't make sense that this is higher than waypoint_updater rate
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
             if self.dbw_enabled:
-                # TODO set target velocity properly, among other things
-              if rospy.get_time()-self.last_speed_change > 20:
-                  self.last_speed_change = rospy.get_time()
-                  self.target_speed_index = (self.target_speed_index+1) % 3
 
               throttle, brake, steering = self.controller.control(\
-                      rospy.get_time(), 10.*self.target_speed_index, \
-                      self.velocity, self.cte)
-
+                      rospy.get_time(), self.target_speed, self.velocity, self.cte) 
               rospy.loginfo("tgt v {:.2f} velocity {:.2f} cte {:.2f} thr {:.2f} brk {:.2f} str {:.2f}".format(\
-                      10*self.target_speed_index, \
+                      self.target_speed, \
                       self.velocity, self.cte, throttle, brake, steering))
               self.publish(throttle, brake, -steering)
             rate.sleep()

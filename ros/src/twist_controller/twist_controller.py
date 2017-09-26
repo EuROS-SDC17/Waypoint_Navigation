@@ -21,10 +21,10 @@ class Controller(object):
 
         self.steer_pid = PID(.4,0,2, mn=-1.5, mx=1.5)
         self.steer_lowpass = LowPassFilter(4e-2)
-        self.throttle_pid = PID(1.,0.,1., mn=0, mx=1)
-        self.throttle_lowpass = LowPassFilter(1e-1)
+        self.throttle_pid = PID(1.,0.,.5, mn=0, mx=1)
+        self.throttle_lowpass = LowPassFilter(5e-2)
         self.brake_pid = PID(1.,0.,1.,mn=0,mx=1)
-        self.brake_lowpass = LowPassFilter(1e-1)
+        self.brake_lowpass = LowPassFilter(5e-2)
 
     def reset(self, time, cte):
         """
@@ -58,17 +58,20 @@ class Controller(object):
         else:
             throttle = 0
 
-        if current_velocity > target_velocity:
+        if (target_velocity == 0 and current_velocity > 0) or \
+                (target_velocity > 6. and current_velocity > target_velocity*1.05):
             brake = self.brake_pid.step(\
                     (current_velocity-target_velocity)/self.max_velocity, t_delta)
             brake *= current_velocity*self.max_velocity
             brake = min(10, brake)
         else:
+            self.brake_lowpass.reset()
+            self.brake_lowpass.filt(0., 0.)
             brake = 0
 
         steer = self.steer_pid.step(cte, t_delta)
 
-        rospy.loginfo("thr {:.2f} brake {:.2f} steer {:.2f}".format(throttle, brake, steer))
+        # rospy.loginfo("thr {:.2f} brake {:.2f} steer {:.2f}".format(throttle, brake, steer))
 
         self.last_update = timestamp
         # return throttle, 0., steer

@@ -10,7 +10,9 @@
     <include file="$(find waypoint_loader)/launch/waypoint_loader.launch"/>
 
     <!--Waypoint Follower Node -->
+    <!--
     <include file="$(find waypoint_follower)/launch/pure_pursuit.launch"/>
+    -->
 
     <!--Waypoint Updater Node -->
     <include file="$(find waypoint_updater)/launch/waypoint_updater.launch"/>

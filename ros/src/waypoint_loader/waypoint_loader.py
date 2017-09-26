@@ -52,18 +52,9 @@ class WaypointLoader(object):
                 p.pose.pose.position.y = float(wp['y'])
                 p.pose.pose.position.z = float(wp['z'])
 
-                # NOTE: Commented out Udacity's code below. The unit for yaw
-                # is inconsistent with wp_yaw_const.txt in Udacity's version.
-                # If Udacity does not update the file to unify their use
-                # of radian vs. degree we should do the conversion ourselves.
-                # Also note that in the real test track the yaw is in
-                # radians in the track waypoint file.
-                q = self.quaternion_from_yaw(float(wp['yaw'])/180*math.pi)
+                q = self.quaternion_from_yaw(float(wp['yaw']))
                 p.pose.pose.orientation = Quaternion(*q)
                 p.twist.twist.linear.x = float(self.get_velocity(self.velocity))
-                # q = self.quaternion_from_yaw(float(wp['yaw']))
-                # p.pose.pose.orientation = Quaternion(*q)
-                # p.twist.twist.linear.x = float(self.velocity*0.27778)
 
                 waypoints.append(p)
         return self.decelerate(waypoints)

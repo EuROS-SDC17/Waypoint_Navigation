@@ -31,8 +31,10 @@ def mph2kmph(mph):
 def kmph2mps(kmph):
     return kmph / 3.6
 
-LOOKAHEAD_WPS = 30 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
 DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
+MIN_STOP_DISTANCE = 10.
+STOP_DISTANCE= 40.
 
 class WaypointUpdater(object):
     """
@@ -60,10 +62,12 @@ class WaypointUpdater(object):
         self.position = None
         self.orientation = None
         self.base_waypoints = None
-        self.traffic_light = None
+        # TODO where is self.traffic_light used?
+        # self.traffic_light = None
+        self.red_traffic_light_index = None
         self.obstacle = None
 
-        rate = rospy.Rate(10) # 10hz
+        rate = rospy.Rate(50) # 10hz
         while not rospy.is_shutdown():
             self.update_waypoints()
             rate.sleep()
@@ -109,7 +113,7 @@ class WaypointUpdater(object):
         Callback for receiving all base waypoints of a track
         :param msg: styx_msgs/Lane message
         """
-        rospy.logdebug("received waypoints: {0}".format(len(msg.waypoints)))
+        rospy.loginfo("received waypoints: {0}".format(len(msg.waypoints)))
 
         if self.base_waypoints is None:
             self.base_waypoints = msg.waypoints
@@ -349,7 +353,6 @@ class WaypointUpdater(object):
         if i == -1:
             return [], 1E6
 
-
         # now decide which way to go
         next_i = (i + 1) % len(self.base_waypoints)
         n_wb = self.base_waypoints[next_i].pose.pose.position
@@ -361,12 +364,28 @@ class WaypointUpdater(object):
         rospy.logdebug("scanning {}".format("forward" if scan_direction else "backward"))
 
         result = []
+        tf_wp_index = None
         for j in range(0, LOOKAHEAD_WPS):
             index = (i + j*scan_direction) % len(self.base_waypoints)
             self.set_waypoint_velocity(self.base_waypoints, index, kmph2mps(mph2kmph(DEFAULT_VELOCITY)))
             waypoint = self.base_waypoints[index]
             result.append(waypoint)
+            if j>0:
+                total_dist += self.distance(result[j].pose.pose.position, result[j-1].pose.pose.position)
+            else:
+                total_dist = self.distance(self.position, result[0].pose.pose.position)
+            if (index == self.red_traffic_light_index) and (total_dist > MIN_STOP_DISTANCE):
+                tf_wp_index = j
 
+        if tf_wp_index is not None:
+            total_dist = 0.
+            j = tf_wp_index
+            while total_dist < STOP_DISTANCE and j>0:
+                total_dist += self.distance(result[j-1].pose.pose.position, result[j].pose.pose.position)
+                j -= 1
+            while j < len(result):
+                result[j].twist.twist.linear.x = 0.
+                j += 1
         # TODO CTE should be based on final waypoints, not base_waypoints
         cte = self.distance_from_line(self.position, \
                 self.base_waypoints[i].pose.pose.position, \
