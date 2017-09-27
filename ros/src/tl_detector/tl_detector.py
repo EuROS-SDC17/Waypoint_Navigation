@@ -10,7 +10,6 @@ from light_classification.tl_classifier import TLClassifier
 from light_classification.tl_classifier_cnn import CNNTLStateDetector
 import tf
 import cv2
-from traffic_light_config import config
 import yaml
 import numpy as np
 import math
@@ -152,9 +151,9 @@ class TLDetector(object):
             lights_array = np.array(lights_array)
             self.traffic_lights_tree = KDTree(lights_array)
             # self.stop_positions records the x,y position of stops
-            self.stop_positions = np.array([(x, y) for x,y in self.config['light_positions']])
+            self.stop_positions = np.array([(x, y) for x,y in self.config['stop_line_positions']])
             self.traffic_lights_stops_tree = KDTree(self.stop_positions)
-            self.no_lights = len(config['light_positions'])
+            self.no_lights = len(self.config['stop_line_positions'])
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -221,7 +220,7 @@ class TLDetector(object):
                 # Setting the index to int type
                 int_index = int(index)
                 # Getting the x,y coordinates of the closest light
-                light_x, light_y = config['light_positions'][int_index]
+                light_x, light_y = self.config['stop_line_positions'][int_index]
                 # Getting the nearest waypoint of the closest light
                 light_wp = self.get_closest_waypoint((light_x, light_y))
                 # Computing the distance
@@ -401,8 +400,7 @@ class TLDetector(object):
                 state = self.get_light_state(closest_light, ground_truth, hsv=False, cnn=True)
 
                 return closest_light_wp, state
-            else:
-                return -1, TrafficLight.UNKNOWN
+        return -1, TrafficLight.UNKNOWN
 
 
             #if closest_light:

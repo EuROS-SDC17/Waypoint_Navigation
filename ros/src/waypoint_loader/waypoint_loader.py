@@ -20,9 +20,11 @@ class WaypointLoader(object):
     def __init__(self):
         rospy.init_node('waypoint_loader', log_level=rospy.DEBUG)
 
-        self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1)
+        self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1, latch=True)
 
         self.velocity = rospy.get_param('~velocity')
+        self.publish_rate = rospy.get_param('~publish_rate')
+
         self.new_waypoint_loader(rospy.get_param('~path'))
         rospy.spin()
 
@@ -50,13 +52,9 @@ class WaypointLoader(object):
                 p.pose.pose.position.y = float(wp['y'])
                 p.pose.pose.position.z = float(wp['z'])
 
-                # TODO: Sangxia, please review, I've adopted Udacity's branch as ground truth
-                # q = self.quaternion_from_yaw(float(wp['yaw'])/180*math.pi)
-                # p.pose.pose.orientation = Quaternion(*q)
-                # p.twist.twist.linear.x = float(self.get_velocity(self.velocity))
                 q = self.quaternion_from_yaw(float(wp['yaw']))
                 p.pose.pose.orientation = Quaternion(*q)
-                p.twist.twist.linear.x = float(self.velocity*0.27778)
+                p.twist.twist.linear.x = float(self.get_velocity(self.velocity))
 
                 waypoints.append(p)
         return self.decelerate(waypoints)
@@ -77,14 +75,11 @@ class WaypointLoader(object):
         return waypoints
 
     def publish(self, waypoints):
-        rate = rospy.Rate(40)
-        while not rospy.is_shutdown():
-            lane = Lane()
-            lane.header.frame_id = '/world'
-            lane.header.stamp = rospy.Time(0)
-            lane.waypoints = waypoints
-            self.pub.publish(lane)
-            rate.sleep()
+        lane = Lane()
+        lane.header.frame_id = '/world'
+        lane.header.stamp = rospy.Time(0)
+        lane.waypoints = waypoints
+        self.pub.publish(lane)
 
 
 if __name__ == '__main__':
