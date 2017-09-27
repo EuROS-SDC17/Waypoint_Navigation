@@ -292,7 +292,10 @@ class TLDetector(object):
 
             if closest_light:
                 state = closest_light.state  # Temporary use the state from the simulator
-                return closest_light_wp, state
+                if state == TrafficLight.YELLOW:
+                    return closest_light_wp, TrafficLight.RED
+                else:
+                    return closest_light_wp, state
             self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 
