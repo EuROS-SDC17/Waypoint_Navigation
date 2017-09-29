@@ -32,9 +32,10 @@ def kmph2mps(kmph):
     return kmph / 3.6
 
 LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
-DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
+# DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
+DEFAULT_VELOCITY = 40 # default velocity for 2nd phase waypoint updater
 MIN_STOP_DISTANCE = 10.
-STOP_DISTANCE= 40.
+STOP_DISTANCE= 30.
 
 class WaypointUpdater(object):
     """
@@ -127,7 +128,7 @@ class WaypointUpdater(object):
         rospy.logdebug("received traffic light: {0}".format(msg))
 
         index = msg.data
-        self.red_traffic_light_index = index
+        self.red_traffic_light_index = index if index >= 0 else None
 
         rospy.logdebug("nearest red traffic light at waypoint: {}".format(index))
         marker = Marker()

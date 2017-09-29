@@ -137,7 +137,7 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
-        light_wp, state = self.process_traffic_lights()
+        light_wp, stop_wp, state = self.process_traffic_lights()
 
         '''
         Publish upcoming red lights at camera frequency.
@@ -151,11 +151,40 @@ class TLDetector(object):
         elif self.state_count >= STATE_COUNT_THRESHOLD:
             self.last_state = self.state
             light_wp = light_wp if state == TrafficLight.RED else -1
-            self.last_wp = light_wp
-            self.upcoming_red_light_pub.publish(Int32(light_wp))
+            stop_wp = stop_wp if state == TrafficLight.RED else -1
+            stop_wp += ((light_wp - stop_wp) / 2 - 2) % len(self.waypoints_array)  # stop line is too far from a crossing
+            # self.last_wp = light_wp
+            # self.upcoming_red_light_pub.publish(Int32(light_wp))
+            self.last_wp = stop_wp
+            self.upcoming_red_light_pub.publish(Int32(stop_wp))
         else:
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
+
+
+    def distance_2d(self, a, b):
+        """
+        Euclidean distance between two 3D points
+        :param a: first point
+        :param b: second point
+        :return: the distance
+        """
+        xdiff = a[0] - b[0]
+        ydiff = a[1] - b[1]
+        return math.sqrt(xdiff*xdiff + ydiff*ydiff)
+
+
+    def get_nearest_stop_line(self, position):
+        stop_line_positions = self.config['stop_line_positions']
+        min_distance = 1E10
+        min_stop_line = None
+        for stop_line in stop_line_positions:
+            d = self.distance_2d(stop_line, [position.position.x, position.position.y])
+            if d < min_distance:
+                min_distance = d
+                min_stop_line = stop_line
+        return min_stop_line
+
 
     def get_closest_waypoint(self, pose):
         """Identifies the closest path waypoint to the given position
@@ -172,6 +201,23 @@ class TLDetector(object):
             return -1
         else:
             return self.waypoints_tree.query([(pose.position.x, pose.position.y)])[1][0]
+
+
+    def get_nearest_stop_waypoint(self, location):
+        """Identifies the closest path waypoint to the given position
+            https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
+            solved using a k-d tree of waypoints coordinates
+        Args:
+            location (tuple): position to match a waypoint to
+
+        Returns:
+            int: index of the closest waypoint in self.waypoints
+
+        """
+        if not self.waypoints_tree:
+            return -1
+        else:
+            return self.waypoints_tree.query([location])[1][0]
 
 
     def project_to_image_plane(self, point_in_world):
@@ -279,25 +325,31 @@ class TLDetector(object):
             closest_distance = MAX_DISTANCE
             closest_light = None
             closest_light_wp = None
+            closest_stop_wp = None
 
             for light in self.lights:
                 light_wp = self.get_closest_waypoint(light.pose.pose)
-                distance = light_wp - car_position
+                stop_line = self.get_nearest_stop_line(light.pose.pose)
+                stop_wp = self.get_nearest_stop_waypoint(stop_line)
+                # distance = light_wp - car_position
+                distance = stop_wp - car_position
 
                 # Ignore traffic lights that are behind us
                 if (distance < closest_distance and distance > 0):
                     closest_distance = distance
                     closest_light = light
                     closest_light_wp = light_wp
+                    closest_stop_wp = stop_wp
 
+            rospy.logdebug("car=", car_position,"light=", closest_light_wp, "stop=", closest_stop_wp, "state=", None if not closest_light else closest_light.state)
             if closest_light:
                 state = closest_light.state  # Temporary use the state from the simulator
                 if state == TrafficLight.YELLOW:
-                    return closest_light_wp, TrafficLight.RED
+                    return closest_light_wp, closest_stop_wp, TrafficLight.RED
                 else:
-                    return closest_light_wp, state
+                    return closest_light_wp, closest_stop_wp, state
             self.waypoints = None
-        return -1, TrafficLight.UNKNOWN
+        return -1, -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
     try:
