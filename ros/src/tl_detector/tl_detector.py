@@ -152,7 +152,9 @@ class TLDetector(object):
             self.last_state = self.state
             light_wp = light_wp if state == TrafficLight.RED else -1
             stop_wp = stop_wp if state == TrafficLight.RED else -1
-            stop_wp += ((light_wp - stop_wp) / 2 - 2) % len(self.waypoints_array)  # stop line is too far from a crossing
+            # stop_wp = (stop_wp - 2) % len(self.waypoints_array)  # sentinel to brake
+            # if stop_wp >= 0:
+            #     stop_wp += ((light_wp - stop_wp) / 2 - 2) % len(self.waypoints_array)  # stop line is too far from a crossing
             # self.last_wp = light_wp
             # self.upcoming_red_light_pub.publish(Int32(light_wp))
             self.last_wp = stop_wp
