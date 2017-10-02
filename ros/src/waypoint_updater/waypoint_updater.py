@@ -104,9 +104,9 @@ class WaypointUpdater(object):
         marker.pose.position.x = msg.pose.position.x
         marker.pose.position.y = msg.pose.position.y
         marker.pose.position.z = msg.pose.position.z
-        # publish pose in purple
+        # publish pose in pink
         self.vis_pub.publish(marker)
-        
+
         orient = msg.pose.orientation
         yaw = tf.transformations.euler_from_quaternion([orient.x, orient.y, orient.z, orient.w])[2]
         self.orientation = Point(math.cos(yaw), math.sin(yaw), 0.)
@@ -121,6 +121,36 @@ class WaypointUpdater(object):
 
         if self.base_waypoints is None:
             self.base_waypoints = msg.waypoints
+
+        marker = Marker()
+        marker.header.frame_id = "/world"
+        marker.ns = "road"
+        marker.id = 1000
+        marker.type = marker.LINE_STRIP
+        marker.action = marker.ADD
+        # Line strip only uses x for width, not y or z
+        marker.scale.x = 3.
+        marker.color.a = 1.0
+        marker.color.r = 0.82
+        marker.color.g = 0.82
+        marker.color.b = 0.82
+        marker.pose.orientation.w = 1.0
+        for wp in self.base_waypoints:
+            p = Point()
+            p.x = wp.pose.pose.position.x
+            p.y = wp.pose.pose.position.y
+            p.z = wp.pose.pose.position.z
+            marker.points.append(p)
+
+        # Add the first waypoint again to complete the loop
+        p = Point()
+        p.x = self.base_waypoints[0].pose.pose.position.x
+        p.y = self.base_waypoints[0].pose.pose.position.y
+        p.z = self.base_waypoints[0].pose.pose.position.z
+        marker.points.append(p)
+
+        # Publish the road waypoints (grey)
+        self.vis_pub.publish(marker)
 
 
     def traffic_cb(self, msg):
@@ -139,7 +169,7 @@ class WaypointUpdater(object):
         marker.header.frame_id = "/world"
         marker.ns = "traffic_light"
         marker.id = 10e6
-        marker.type = marker.SPHERE
+        marker.type = marker.CUBE
 
         if index != -1 and self.base_waypoints:
             marker.action = marker.ADD
@@ -153,7 +183,7 @@ class WaypointUpdater(object):
             marker.pose.position.z = 0
 
         marker.scale.x = 1.
-        marker.scale.y = 1.
+        marker.scale.y = 5.
         marker.scale.z = 1.
         marker.color.a = 1.0
         marker.color.r = 1.0
