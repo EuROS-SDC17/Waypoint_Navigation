@@ -75,6 +75,7 @@ class TLDetector(object):
 
     def Quaternion_toEulerianAngle(self, x, y, z, w):
         """
+        Conversion from quaternion to Eulerian angle
         See: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
         """
 
@@ -125,6 +126,12 @@ class TLDetector(object):
         self.pose = msg
 
     def waypoints_cb(self, waypoints):
+        """
+        Initializes a KD tree for fast recovery of the nearest waypoint
+
+        :param waypoints:
+        :return: self.waypoints_tree is set with KDTree containing waypoints
+        """
         hash_waypoints = hash(str(waypoints.waypoints))
         # We keep trace if the waypoints have changed since the last time
         if hash_waypoints != self.hash_waypoints:
@@ -139,6 +146,14 @@ class TLDetector(object):
             self.waypoints_tree = KDTree(waypoints_array)
 
     def traffic_cb(self, msg):
+        """
+        Initilizes data structures for traffic lights and stop lines
+
+        :param msg:
+        :return: self.stop_positions is an array containing stop lines
+        self.traffic_lights_stops_tree is set with KDTree containing traffic lights
+        self.no_lights is set with the number of expected traffic lights
+        """
         self.lights = msg.lights
         lights_array = [(light.pose.pose.position.x, light.pose.pose.position.y) for light in self.lights]
         hash_lights = hash(str(lights_array))

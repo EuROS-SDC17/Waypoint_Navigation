@@ -4,7 +4,7 @@ import cv2
 
 class TLClassifier(object):
     def __init__(self):
-        #TODO load classifier
+        # load classifier
         pass
 
     def get_classification(self, image):
@@ -17,10 +17,12 @@ class TLClassifier(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        #TODO implement light color prediction
 
+        # implementing light color prediction
         # color thresholds in HSV space for the traffic lights
-        # RED
+        # suitable both for simulator and rosbag images
+
+        # RED definitions
         TRACK_RED_MIN = np.array([21, 84, 225])
         TRACK_RED_MAX = np.array([30, 96, 255])
 
@@ -32,7 +34,7 @@ class TLClassifier(object):
 
         red_threshold = 15
 
-        # YELLOW
+        # YELLOW definitions
         SIMULATOR_YELLOW_MIN = np.array([25, 215, 225])
         SIMULATOR_YELLOW_MAX = np.array([35, 225, 255])
 
@@ -41,7 +43,7 @@ class TLClassifier(object):
 
         yellow_threshold = 15
 
-        # GREEN
+        # GREEN definitions
         TRACK_GREEN_MIN = np.array([85, 80, 225])
         TRACK_GREEN_MAX = np.array([95, 115, 255])
 
@@ -69,7 +71,7 @@ class TLClassifier(object):
                                 cv2.inRange(hsv_img, SIMULATOR_GREEN2_MIN, SIMULATOR_GREEN2_MAX))
 
 
-        print ("Color detected:", red_threshed, yellow_threshed, green_threshed)
+        print ("Color detected by HSV thresholds:", red_threshed, yellow_threshed, green_threshed)
 
         if red_threshed >= red_threshold:
             # detecting red which has highest priority
@@ -81,5 +83,5 @@ class TLClassifier(object):
             # finally detecting green
             return TrafficLight.GREEN
         else:
-            # if everything fails
+            # if everything else fails
             return TrafficLight.UNKNOWN
