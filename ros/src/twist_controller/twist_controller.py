@@ -17,7 +17,7 @@ class Controller(object):
         :param kwargs: TODO
         """
         self.last_update = 0
-        self.max_velocity = 30
+        self.max_velocity = 50
 
         self.steer_pid = PID(.4,0,.7, mn=-2.5, mx=2.5)
         self.steer_lowpass = LowPassFilter(4e-3)
@@ -70,10 +70,10 @@ class Controller(object):
             throttle = 0
 
         if (target_velocity == 0 and current_velocity > 0) or \
-                (target_velocity > 6. and current_velocity > target_velocity*1.05) or \
                 (current_velocity * .99 > target_velocity):
+            # ('''target_velocity > 6. and ''' current_velocity > target_velocity*1.05):
             brake = self.brake_pid.step(\
-                    (current_velocity-target_velocity)/self.max_velocity, t_delta)
+                (current_velocity-target_velocity)/self.max_velocity, t_delta)
             brake *= current_velocity*self.max_velocity
             brake = min(10, brake)
         else:

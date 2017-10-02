@@ -33,9 +33,10 @@ def kmph2mps(kmph):
 
 LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
 # DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
+MAXIMAL_VELOCITY = 50 # default velocity for 2nd phase waypoint updater
 DEFAULT_VELOCITY = 40 # default velocity for 2nd phase waypoint updater
 MIN_STOP_DISTANCE = 10.
-STOP_DISTANCE= 30.
+STOP_DISTANCE= 60.  #
 
 class WaypointUpdater(object):
     """
@@ -66,7 +67,9 @@ class WaypointUpdater(object):
         # TODO where is self.traffic_light used?
         # self.traffic_light = None
         self.red_traffic_light_index = None
+        self.previous_red_traffic_light_index = None
         self.obstacle = None
+        self.velocity_plan = {}  # velocities for next waypoints
 
         rate = rospy.Rate(50) # 10hz
         while not rospy.is_shutdown():
@@ -128,6 +131,7 @@ class WaypointUpdater(object):
         rospy.logdebug("received traffic light: {0}".format(msg))
 
         index = msg.data
+        self.previous_red_traffic_light_index = self.red_traffic_light_index
         self.red_traffic_light_index = index if index >= 0 else None
 
         rospy.logdebug("nearest red traffic light at waypoint: {}".format(index))
@@ -256,8 +260,9 @@ class WaypointUpdater(object):
 
         min_distance = 1E6
         min_index = -1
+        length = len(self.base_waypoints)
         for index in range(candidate_index-self.search_range, candidate_index+self.search_range+1):
-            wp = self.base_waypoints[index % len(self.base_waypoints)].pose.pose.position
+            wp = self.base_waypoints[index % length].pose.pose.position
             # get direction from vehicle to waypoint
             direction = self.make_vector(self.position, wp)
             rospy.logdebug("orientation = {0}, direction = {1}".format(self.orientation, direction))
@@ -268,7 +273,7 @@ class WaypointUpdater(object):
             distance = self.distance(self.position, wp)
             if distance < min_distance:
                 min_distance = distance
-                min_index = index % len(self.base_waypoints)
+                min_index = index % length
         rospy.logdebug("found nearest waypoint ahead: {0}".format(
                       self.base_waypoints[min_index].pose.pose.position))
         self.previous_closest_wp_index = min_index
@@ -352,10 +357,11 @@ class WaypointUpdater(object):
                 self.position, i, \
                 0 if self.base_waypoints is None else len(self.base_waypoints)))
         if i == -1:
-            return [], 1E6
+            return [], [], 1E6
 
         # now decide which way to go
-        next_i = (i + 1) % len(self.base_waypoints)
+        length = len(self.base_waypoints)
+        next_i = (i + 1) % length
         n_wb = self.base_waypoints[next_i].pose.pose.position
         next_direction = self.make_vector(self.position, n_wb)
         scan_direction = 1 # default direction is towards next waypoint in sequence
@@ -364,34 +370,39 @@ class WaypointUpdater(object):
             scan_direction = -1;
         rospy.logdebug("scanning {}".format("forward" if scan_direction else "backward"))
 
-        result = []
+        final_waypoints = []
+        final_indices = []
         tf_wp_index = None
         for j in range(0, LOOKAHEAD_WPS):
-            index = (i + j*scan_direction) % len(self.base_waypoints)
+            index = (i + j*scan_direction) % length
             self.set_waypoint_velocity(self.base_waypoints, index, kmph2mps(mph2kmph(DEFAULT_VELOCITY)))
             waypoint = self.base_waypoints[index]
-            result.append(waypoint)
+            final_waypoints.append(waypoint)
+            final_indices.append(index)
             if j>0:
-                total_dist += self.distance(result[j].pose.pose.position, result[j-1].pose.pose.position)
+                total_dist += self.distance(final_waypoints[j].pose.pose.position, final_waypoints[j-1].pose.pose.position)
             else:
-                total_dist = self.distance(self.position, result[0].pose.pose.position)
+                total_dist = self.distance(self.position, final_waypoints[0].pose.pose.position)
             if (index == self.red_traffic_light_index) and (total_dist > MIN_STOP_DISTANCE):
                 tf_wp_index = j
 
-        if tf_wp_index is not None:
-            total_dist = 0.
-            j = tf_wp_index
-            while total_dist < STOP_DISTANCE and j>0:
-                total_dist += self.distance(result[j-1].pose.pose.position, result[j].pose.pose.position)
-                j -= 1
-            while j < len(result):
-                result[j].twist.twist.linear.x = 0.
-                j += 1
+        # if tf_wp_index is not None:
+        #     total_dist = 0.
+        #     j = tf_wp_index
+        #     while total_dist < STOP_DISTANCE and j>0:
+        #         total_dist += self.distance(final_waypoints[j-1].pose.pose.position, final_waypoints[j].pose.pose.position)
+        #         j -= 1
+        #     while j < len(final_waypoints):
+        #         final_waypoints[j].twist.twist.linear.x = 0.
+        #         j += 1
+
+        self.update_waypoint_speed(i, scan_direction, final_waypoints, final_indices, MAXIMAL_VELOCITY)
+
         # TODO CTE should be based on final waypoints, not base_waypoints
         cte = self.distance_from_line(self.position, \
                 self.base_waypoints[i].pose.pose.position, \
-                self.base_waypoints[(i-scan_direction) % len(self.base_waypoints)].pose.pose.position)
-        return result, cte
+                self.base_waypoints[(i-scan_direction) % length].pose.pose.position)
+        return final_waypoints, final_indices, cte
 
     def make_cte_message(self, frame_id, cte):
         msg = CTE()
@@ -414,7 +425,7 @@ class WaypointUpdater(object):
         return msg
 
     def update_waypoints(self):
-        final_waypoints, cte = self.prepare_waypoints()
+        final_waypoints, final_indices, cte = self.prepare_waypoints()
         rospy.logdebug("prepared waypoints: {0}".format(final_waypoints))
 
         if not final_waypoints:
@@ -448,6 +459,85 @@ class WaypointUpdater(object):
 
         self.final_waypoints_pub.publish(final_wp_msg)
         self.cte_pub.publish(cte_msg)
+
+    def get_braking_distance(self, velocity):
+        """
+        Estimate braking distance at a given velocity
+        :param self:
+        :param velocity:
+        :return:
+        """
+        return STOP_DISTANCE
+
+    def update_waypoint_speed(self, nearest_ahead_index, scan_direction, final_waypoints, final_indices, velocity):
+        """
+
+        :param self:
+        :param nearest_ahead_index:
+        :param scan_direction:
+        :param final_waypoints:
+        :param final_indices:
+        :param velocity:
+        :return:
+        """
+        if self.red_traffic_light_index == None:
+            # if there is no red/yellow traffic light nearby, set velocity to maximum
+            # rospy.loginfo("No red light, setting maximal velocity")
+            for waypoint in final_waypoints:
+                waypoint.twist.twist.linear.x = kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
+        else:
+            length = len(self.base_waypoints)
+            # either there is a red, velocities differ, or there is no plan
+            if self.red_traffic_light_index != self.previous_red_traffic_light_index or not self.velocity_plan:
+                self.velocity_plan = {}
+                rospy.loginfo("Preparing velocity plan, rwp={0}, prwp={1}".format(self.red_traffic_light_index, self.previous_red_traffic_light_index))
+                # prepare a velocity plan taking into account velocity; operates on base_waypoints not on final ones
+                stop_distance = self.get_braking_distance(velocity)
+                rospy.loginfo("Stop distance={:.2f}".format(stop_distance))
+                # indices in base_waypoints that need their speed set based on red traffic light
+                cumulative_distance = 0
+                i = self.red_traffic_light_index
+                nodes = [i]
+                rospy.loginfo("Red light position:{0}".format(self.red_traffic_light_index))
+                sentinel = 5
+                while cumulative_distance < stop_distance:
+                    j = i
+                    # rospy.loginfo("i={0} sd={1} l={2}".format(i, scan_direction, length))
+                    i -= (1 * scan_direction)
+                    i = i % length
+                    cumulative_distance += self.distance(self.base_waypoints[i].pose.pose.position,
+                                                         self.base_waypoints[j].pose.pose.position)
+                    nodes.insert(0, i)
+
+                count = len(nodes)
+                rospy.logdebug("Identified waypoints: {0}".format(nodes))
+
+                for i, node in enumerate(nodes):
+                    target_velocity = float(count - sentinel - i) / float(count) * kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
+                    # target_velocity = float(count - i - 1) / float(count) * kmph2mps(mph2kmph(5))
+                    self.velocity_plan[node] = target_velocity
+                print "sentinel ",
+                for i in range(sentinel):
+                    print "i:", str(count - i - 1), "n:", nodes[count - i - 1]
+                    self.velocity_plan[nodes[count - i - 1]] = 0
+
+                rospy.loginfo("Velocity plan: {0}".format(self.velocity_plan))
+                rospy.loginfo("Final indices: {0}".format(final_indices))
+            # use current velocity plan
+            in_brake_zone = False
+            for i, idx in enumerate(final_indices):
+                if idx in self.velocity_plan:
+                    final_waypoints[i].twist.twist.linear.x = self.velocity_plan[idx]
+                    print "node:",idx,"vel:",self.velocity_plan[idx],
+                    in_brake_zone = True
+                else:
+                    velocity = 0 if in_brake_zone else kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
+                    final_waypoints[i].twist.twist.linear.x = velocity
+                    print "node:", idx, "vel:", velocity,
+            print
+            print "cn=", nearest_ahead_index, "rl=", self.red_traffic_light_index
+
+        return final_waypoints
 
 if __name__ == '__main__':
     try:

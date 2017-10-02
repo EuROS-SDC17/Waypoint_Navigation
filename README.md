@@ -1,6 +1,14 @@
 # Waypoint Navigation by EuROS team
 Udacity Carla (2016 Lincoln MKZ) self-driving car waypoint navigation project
 
+| NAME  	|E-MAIL   	|SLACK   	|TIME ZONE   	|COUNTRY   	| ROLE  	| 
+|---	|---	|---	|---	|---	|---	|
+|Nikolay Dimitrov 	|nikidimi@gmail.com   	|@nikidimi   	|UTC+2  	|BGR   	| | 
+|Brian Holt   	| bdholt1@gmail.com  	| @bdholt1  	|UTC+1   	| GBR	| | 
+|Sangxia Huang   	| huang.sangxia@gmail.com  	| @sangxia  	| UTC+2  	| SWE  	| | 
+|Luca Massaron   	|lucamassaron@gmail.com   	| @lmassaron  	| UTC+2  	| ITA  	|   	| 
+|Peter Skvarenina   	|peter.skvarenina@gmail.com   	| @squared9  	| UTC+2  	| GER  	| [LEAD]| 
+
 This is the project repo for the final project of the Udacity Self-Driving Car Nanodegree: Programming a Real Self-Driving Car. For more information about the project, see the project introduction [here](https://classroom.udacity.com/nanodegrees/nd013/parts/6047fe34-d93c-4f50-8336-b70ef10cb4b2/modules/e1a23b06-329a-4684-a717-ad476f0d8dff/lessons/462c933d-9f24-42d3-8bdc-a08a5fc866e4/concepts/5ab4b122-83e6-436d-850f-9f4d26627fd9).
 
 ### Installation 
