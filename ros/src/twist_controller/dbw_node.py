@@ -101,6 +101,7 @@ class DBWNode(object):
         while not rospy.is_shutdown():
             if self.dbw_enabled:
 
+              # self.target_speed = 30.
               throttle, brake, steering = self.controller.control(\
                       rospy.get_time(), self.target_speed, self.velocity, self.cte) 
               rospy.loginfo("tgt v {:.2f} velocity {:.2f} cte {:.2f} thr {:.2f} brk {:.2f} str {:.2f}".format(\
