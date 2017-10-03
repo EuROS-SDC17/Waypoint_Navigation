@@ -18,11 +18,16 @@ from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 3
 MAX_DISTANCE = 200  # Ignore traffic lights that are further
+DEBUGGING = False
 
 class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
 
+        # Define if printing debugging information
+        self.DEBUGGING = DEBUGGING
+
+        # Initializing key variables
         self.pose = None
         self.waypoints = None
         self.camera_image = None
@@ -135,7 +140,8 @@ class TLDetector(object):
         hash_waypoints = hash(str(waypoints.waypoints))
         # We keep trace if the waypoints have changed since the last time
         if hash_waypoints != self.hash_waypoints:
-            print("Updating waypoints and its KDTree")
+            if self.DEBUGGING:
+                print("Updating waypoints and its KDTree")
             self.hash_waypoints = hash_waypoints
             self.waypoints = waypoints
             # Initialization of waypoints k-d tree for fast search
@@ -158,7 +164,8 @@ class TLDetector(object):
         lights_array = [(light.pose.pose.position.x, light.pose.pose.position.y) for light in self.lights]
         hash_lights = hash(str(lights_array))
         if hash_lights != self.hash_lights:
-            print("Updating traffic lights KDTree")
+            if self.DEBUGGING:
+                print("Updating traffic lights KDTree")
             self.hash_lights = hash_lights
             # Initialization of traffic lights k-d tree for fast search
             # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
@@ -302,7 +309,9 @@ class TLDetector(object):
             u = int((-fx * (x / z) * image_width + cx))
             v = int((-fy * (y / z) * image_height + cy))
 
-            print(str(datetime.now()), "Traffic light position on screen: ", u, v)
+            if self.DEBUGGING:
+                print(str(datetime.now()), "Traffic light position on screen: ", u, v)
+
             return (u, v)
 
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
@@ -359,11 +368,12 @@ class TLDetector(object):
         else:
             state_cnn = 4
 
-        print(str(datetime.now()))
-        if hsv:
-            print("HSV Detected traffic light state is:", self.light_states[state_hsv])
-        if cnn:
-            print("CNN Detected traffic light state is:", self.light_states[state_cnn])
+        if self.DEBUGGING:
+            print(str(datetime.now()))
+            if hsv:
+                print("HSV Detected traffic light state is:", self.light_states[state_hsv])
+            if cnn:
+                print("CNN Detected traffic light state is:", self.light_states[state_cnn])
 
         return state_cnn
 
@@ -388,7 +398,9 @@ class TLDetector(object):
 
             # Transforming the car position into the closest waypoint
             car_position = self.get_closest_waypoint(pose)
-            print (str(datetime.now()), "Car position:", car_position)
+
+            if self.DEBUGGING:
+                print (str(datetime.now()), "Car position:", car_position)
 
             # Finding the closest traffic light by comparing waypoints
             closest_light_index, closest_light_wp, closest_distance = self.get_closest_traffic_light(pose, car_position)
@@ -402,10 +414,12 @@ class TLDetector(object):
                 closest_light = None
 
             if closest_light:
-                print(str(datetime.now()), "Detected traffic light no", closest_light_index, "at distance:", closest_distance)
-                print("the light is at", closest_light, "the stop sign is at ", self.stop_positions[closest_light_index])
                 ground_truth = self.lights[closest_light_index].state
-                print("Ground truth state is:", self.light_states[ground_truth])
+
+                if self.DEBUGGING:
+                    print("Ground truth state is:", self.light_states[ground_truth])
+                    print(str(datetime.now()), "Detected traffic light no", closest_light_index, "at distance:", closest_distance)
+                    print("the light is at", closest_light, "the stop sign is at ", self.stop_positions[closest_light_index])
 
                 # Depending if we are debugging or not, we can get the traffic light location
                 # from the topic /vehicle/traffic_lights which is the ground truth

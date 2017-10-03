@@ -11,8 +11,14 @@ class CNNTLStateDetector(object):
 
     def __init__(self):
 
+        # Define if printing debugging information
+        try:
+            self.DEBUGGING = DEBUGGING
+        except:
+            self.DEBUGGING = False
+
         """Initialization routine"""
-        tf_config = tf.ConfigProto(log_device_placement=True) # This is just reporting if it using gpu
+        tf_config = tf.ConfigProto(log_device_placement=False) # If TRUE it will provide verbose reporting
         tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5 # We divide GPU capacity into two
         tf_config.operation_timeout_in_ms = 10000  # terminate if not returning in 10 seconds
 
@@ -46,7 +52,7 @@ class CNNTLStateDetector(object):
             # image is already a Numpy ndarray
             return image
 
-    def get_classification(self, image, debug=False):
+    def get_classification(self, image):
         """
         Determines the color of the traffic light in a
         cropped portion of the image
@@ -103,7 +109,7 @@ class CNNTLStateDetector(object):
         # As soon as we have a confirmed traffic light color, we return it
 
         for score, cut_image in sorted(detections, reverse=True):
-            if debug:
+            if self.DEBUGGING:
                 cv2.imshow('image', cut_image)
                 cv2.waitKey(1)
 
