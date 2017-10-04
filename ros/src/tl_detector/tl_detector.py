@@ -412,7 +412,7 @@ class TLDetector(object):
                     closest_light_position = self.lights[closest_light_index].pose.pose.position
                     closest_light = [closest_light_position.x, closest_light_position.y, closest_light_position.z]
                 else:
-                    closest_light = config['light_positions'][closest_light_index]
+                    closest_light = self.config['light_positions'][closest_light_index]
             else:
                 closest_light = None
 
