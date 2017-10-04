@@ -19,6 +19,8 @@ from scipy.spatial import KDTree
 STATE_COUNT_THRESHOLD = 3
 MAX_DISTANCE = 200  # Ignore traffic lights that are further
 DEBUGGING = False
+CLASSIFIER_DISABLED = False
+
 
 class TLDetector(object):
     def __init__(self):
@@ -26,6 +28,7 @@ class TLDetector(object):
 
         # Define if printing debugging information
         self.DEBUGGING = DEBUGGING
+        self.CLASSIFIER_DISABLED = CLASSIFIER_DISABLED
 
         # Initializing key variables
         self.pose = None
@@ -71,8 +74,9 @@ class TLDetector(object):
         self.hash_lights = 0
 
         # Initializing classifiers
-        self.light_classifier = TLClassifier()
-        self.light_classifier_cnn = CNNTLStateDetector()
+        if not self.CLASSIFIER_DISABLED:
+            self.light_classifier = TLClassifier()
+            self.light_classifier_cnn = CNNTLStateDetector()
 
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
@@ -374,9 +378,6 @@ class TLDetector(object):
                 print("HSV Detected traffic light state is:", self.light_states[state_hsv])
             if cnn:
                 print("CNN Detected traffic light state is:", self.light_states[state_cnn])
-
-        if state_cnn == TrafficLight.YELLOW:
-            return TrafficLight.RED
         return state_cnn
 
     def process_traffic_lights(self, debugging=True):
@@ -427,8 +428,14 @@ class TLDetector(object):
                 # from the topic /vehicle/traffic_lights which is the ground truth
                 # the topic is incorporated in self.lights whose x,y,z positions are
                 # in self.lights.pose.pose.position
+                if self.CLASSIFIER_DISABLED:
+                    state = ground_truth
+                else:
+                    state = self.get_light_state(closest_light, ground_truth, hsv=False, cnn=True)
 
-                state = self.get_light_state(closest_light, ground_truth, hsv=False, cnn=True)
+                #Yellow as red
+                if state == TrafficLight.YELLOW:
+                    state = TrafficLight.RED
 
                 return closest_light_wp, state
         return -1, TrafficLight.UNKNOWN
