@@ -1,7 +1,6 @@
 from styx_msgs.msg import TrafficLight
 import tensorflow as tf
 import cv2
-from PIL import Image
 import numpy as np
 
 
@@ -17,10 +16,20 @@ class CNNTLStateDetector(object):
         except:
             self.DEBUGGING = False
 
-        """Initialization routine"""
+        """Initialization routines"""
+
+        # Checking TensorFlow Version
+        print('TensorFlow Version: %s' % str(tf.__version__))
+
         tf_config = tf.ConfigProto(log_device_placement=False) # If TRUE it will provide verbose reporting
-        tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5 # We divide GPU capacity into two
         tf_config.operation_timeout_in_ms = 10000  # terminate if not returning in 10 seconds
+
+        # Checking for a GPU
+        if not tf.test.gpu_device_name():
+            print('No GPU found. Please use a GPU to assure promply response from tl_detector.')
+        else:
+            print('Default GPU Device: %s'% tf.test.gpu_device_name())
+            tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5 # We divide GPU capacity into two
 
         # Restoring ssd_mobilenet_v1_coco
         self.detection_graph = tf.Graph()
