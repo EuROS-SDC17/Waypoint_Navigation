@@ -1,24 +1,21 @@
 #!/usr/bin/env python
 import rospy
 from std_msgs.msg import Int32
-from geometry_msgs.msg import PoseStamped, Pose
+from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import TrafficLightArray, TrafficLight
 from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-from light_classification.tl_classifier import TLClassifier
 from light_classification.tl_classifier_cnn import CNNTLStateDetector
 import tf
-import cv2
 import yaml
 import numpy as np
-import math
 from datetime import datetime
 from scipy.spatial import KDTree
+import rospy
 
 STATE_COUNT_THRESHOLD = 3
 MAX_DISTANCE = 200  # Ignore traffic lights that are further
-DEBUGGING = False
 CLASSIFIER_DISABLED = False
 
 
@@ -27,7 +24,6 @@ class TLDetector(object):
         rospy.init_node('tl_detector')
 
         # Define if printing debugging information
-        self.DEBUGGING = DEBUGGING
         self.CLASSIFIER_DISABLED = CLASSIFIER_DISABLED
 
         # Initializing key variables
@@ -75,61 +71,13 @@ class TLDetector(object):
 
         # Initializing classifiers
         if not self.CLASSIFIER_DISABLED:
-            self.light_classifier = TLClassifier()
             self.light_classifier_cnn = CNNTLStateDetector()
 
+        # Subscribe to images after everything is loaded
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+        rospy.loginfo("TL Detector ready")
 
         rospy.spin()
-
-    def Quaternion_toEulerianAngle(self, x, y, z, w):
-        """
-        Conversion from quaternion to Eulerian angle
-        See: https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-        """
-
-        ysqr = y * y
-
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + ysqr)
-        X = math.degrees(math.atan2(t0, t1))
-
-        t2 = +2.0 * (w * y - z * x)
-        t2 = 1 if t2 > 1 else t2
-        t2 = -1 if t2 < -1 else t2
-        Y = math.degrees(math.asin(t2))
-
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (ysqr + z * z)
-        Z = math.degrees(math.atan2(t3, t4))
-
-        return (X, Y, Z)
-
-    def clockwise_rotation(self, target_x, target_y, x_origin=0.0, y_origin=0.0, yaw_degrees=0.0):
-        """
-        see:  https://stackoverflow.com/questions/20104611/find-new-coordinates-of-a-point-after-rotation
-
-        Ywc = -Xwt * Sin(psi) + Ywt * Cos(psi);
-        Xwc =  Xwt * Cos(psi) + Ywt * Sin(psi);
-        wc =  Zwt
-
-        Psi = angle of camera rotation
-        (Xwc,Ywc,Zwc) = world coordinates of object transformed to camera orientation
-        """
-        # Converting degrees into radiants
-        rad_yaw = math.radians(yaw_degrees)
-
-        # Centering to the origin
-        centered_x = target_x - x_origin
-        centered_y = target_y - y_origin
-
-        # y' = y*cos(a) - x*sin(a)
-        rotated_y = centered_y * math.cos(rad_yaw) - centered_x * math.sin(rad_yaw)
-
-        # x' = y*sin(a) + x*cos(a)
-        rotated_x = centered_y * math.sin(rad_yaw) + centered_x * math.cos(rad_yaw)
-
-        return (rotated_x, rotated_y)
 
     def pose_cb(self, msg):
         self.pose = msg
@@ -144,8 +92,7 @@ class TLDetector(object):
         hash_waypoints = hash(str(waypoints.waypoints))
         # We keep trace if the waypoints have changed since the last time
         if hash_waypoints != self.hash_waypoints:
-            if self.DEBUGGING:
-                print("Updating waypoints and its KDTree")
+            rospy.logdebug("Updating waypoints and its KDTree")
             self.hash_waypoints = hash_waypoints
             self.waypoints = waypoints
             # Initialization of waypoints k-d tree for fast search
@@ -168,8 +115,7 @@ class TLDetector(object):
         lights_array = [(light.pose.pose.position.x, light.pose.pose.position.y) for light in self.lights]
         hash_lights = hash(str(lights_array))
         if hash_lights != self.hash_lights:
-            if self.DEBUGGING:
-                print("Updating traffic lights KDTree")
+            rospy.logdebug("Updating traffic lights KDTree")
             self.hash_lights = hash_lights
             # Initialization of traffic lights k-d tree for fast search
             # k-d tree (https://en.wikipedia.org/wiki/K-d_tree)
@@ -257,76 +203,6 @@ class TLDetector(object):
         else:
             return None, None, None
 
-    def project_to_image_plane(self, point_in_world):
-        """Project point from 3D world coordinates to 2D camera image location
-
-        Args:
-            point_in_world (Point): 3D location of a point in the world
-
-        Returns:
-            x (int): x coordinate of target point in image
-            y (int): y coordinate of target point in image
-
-        """
-
-        # The focal lengths expressed in pixel units
-        fx = self.config['camera_info']['focal_length_x']
-        fy = self.config['camera_info']['focal_length_y']
-
-        # The image shape
-        image_width = self.config['camera_info']['image_width']
-        image_height = self.config['camera_info']['image_height']
-
-        # Principal x,y points that are at the image center
-        cx = float(image_width/2.0)
-        cy = float(image_height/2.0)
-
-        # Deriving our target position in space
-        target_x = point_in_world[0]
-        target_y = point_in_world[1]
-        try:
-            target_z = point_in_world[2]
-        except:
-            target_z = 1.2
-
-        # Get transform between pose of camera and world frame
-        trans = None
-        try:
-            latency = 0.0
-            now = rospy.Time.now()
-            self.listener.waitForTransform("/base_link",
-                  "/world", now, rospy.Duration(1.0))
-            (trans, rot) = self.listener.lookupTransform("/base_link",
-                  "/world", (now - rospy.Duration(latency)))
-
-            tvec = tf.transformations.translation_matrix(trans)
-            rvec = tf.transformations.quaternion_matrix(rot)
-            homogeneous_coords = np.array([target_x, target_y, target_z, 1.0])
-
-            # Combine all matrices
-            camera_matrix = tf.transformations.concatenate_matrices(tvec, rvec)
-            projection = camera_matrix.dot(homogeneous_coords)
-
-            x, y, z = (projection[1], projection[2], projection[0])
-
-            # Project to image coordinates
-            u = int((-fx * (x / z) * image_width + cx))
-            v = int((-fy * (y / z) * image_height + cy))
-
-            if self.DEBUGGING:
-                print(str(datetime.now()), "Traffic light position on screen: ", u, v)
-
-            return (u, v)
-
-        except (tf.Exception, tf.LookupException, tf.ConnectivityException):
-            rospy.logerr("Failed to find camera to map transform")
-            return(int(cx), int(cy))
-
-        # Using tranform and rotation to calculate 2D position of light in image
-        # based on http://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
-        # https://stackoverflow.com/questions/4490570/math-formula-for-first-person-3d-game
-        # https://stackoverflow.com/questions/28180413/why-is-cv2-projectpoints-not-behaving-as-i-expect
-
     def get_light_state(self, light, ground_truth=None, hsv=False, cnn=True, debugging=False):
         """Determines the current color of the traffic light
 
@@ -343,41 +219,8 @@ class TLDetector(object):
 
         self.camera_image.encoding = "rgb8"
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-
-        image_height = cv_image.shape[0]
-        image_width  = cv_image.shape[1]
-
-        # Updating our config information
-        self.config['camera_info']['image_width'] = image_width
-        self.config['camera_info']['image_height'] = image_height
-
-        #TODO use light location to zoom in on traffic light in image
-
-        #Get classification
-        if hsv:
-            x, y = self.project_to_image_plane(light)
-            min_x = max(x - 100, 0)
-            max_x = min(x + 100, image_width - 1)
-            min_y = max(y - 100, 0)
-            max_y = min(y + 300, image_height - 1)
-            state_hsv = self.light_classifier.get_classification(cv_image[min_y:max_y, min_x:max_x])
-            if debugging:
-                cv2.rectangle(cv_image, (min_x, min_y), (max_x, max_y), (0, 0, 255), 2)
-                cv2.imshow('image', cv_image[min_y:max_y, min_x:max_x])
-                cv2.waitKey(1)
-        else:
-            state_hsv = 4
-        if cnn:
-            state_cnn = self.light_classifier_cnn.get_classification(cv_image)
-        else:
-            state_cnn = 4
-
-        if self.DEBUGGING:
-            print(str(datetime.now()))
-            if hsv:
-                print("HSV Detected traffic light state is:", self.light_states[state_hsv])
-            if cnn:
-                print("CNN Detected traffic light state is:", self.light_states[state_cnn])
+        state_cnn = self.light_classifier_cnn.get_classification(cv_image)
+        rospy.logdebug("CNN Detected traffic light state is: %s", self.light_states[state_cnn])
         return state_cnn
 
     def process_traffic_lights(self, debugging=True):
@@ -401,9 +244,7 @@ class TLDetector(object):
 
             # Transforming the car position into the closest waypoint
             car_position = self.get_closest_waypoint(pose)
-
-            if self.DEBUGGING:
-                print (str(datetime.now()), "Car position:", car_position)
+            rospy.logdebug("Car position: %d", car_position)
 
             # Finding the closest traffic light by comparing waypoints
             closest_light_index, closest_light_wp, closest_distance = self.get_closest_traffic_light(pose, car_position)
@@ -419,10 +260,9 @@ class TLDetector(object):
             if closest_light:
                 ground_truth = self.lights[closest_light_index].state
 
-                if self.DEBUGGING:
-                    print("Ground truth state is:", self.light_states[ground_truth])
-                    print(str(datetime.now()), "Detected traffic light no", closest_light_index, "at distance:", closest_distance)
-                    print("the light is at", closest_light, "the stop sign is at ", self.stop_positions[closest_light_index])
+                rospy.logdebug("Ground truth state is: %s", self.light_states[ground_truth])
+                rospy.logdebug("Detected traffic light no %d at distance: %d", closest_light_index, closest_distance)
+                rospy.logdebug("the light is at %s the stop line is at %s", closest_light, self.stop_positions[closest_light_index])
 
                 # Depending if we are debugging or not, we can get the traffic light location
                 # from the topic /vehicle/traffic_lights which is the ground truth
@@ -440,11 +280,6 @@ class TLDetector(object):
                 return closest_light_wp, state
         return -1, TrafficLight.UNKNOWN
 
-
-            #if closest_light:
-            #    +            state = closest_light.state  # Temporary use the state from the simulator
-            #+
-            #return closest_light_wp, state
 
 if __name__ == '__main__':
     try:
