@@ -20,7 +20,7 @@ class Controller(object):
         self.max_velocity = 50
 
         self.steer_pid = PID(.4,0,.7, mn=-2.5, mx=2.5)
-        self.steer_lowpass = LowPassFilter(4e-3)
+        self.steer_lowpass = LowPassFilter(1e-4)
         self.throttle_pid = PID(1.,0.,.5, mn=0, mx=1)
         self.throttle_lowpass = LowPassFilter(5e-2)
         self.brake_pid = PID(1.,0.,1.,mn=0,mx=1)
@@ -59,7 +59,7 @@ class Controller(object):
             self.speed_factor = min(1., self.speed_factor/.95)
 
         target_velocity *= self.speed_factor
-        if abs(cte) > 3:
+        if abs(cte) > 1.2:
             target_velocity = min(3., target_velocity)
 
         if target_velocity > 0:
