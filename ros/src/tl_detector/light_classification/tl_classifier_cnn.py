@@ -2,6 +2,7 @@ from styx_msgs.msg import TrafficLight
 import tensorflow as tf
 import cv2
 import numpy as np
+import rospy
 
 
 class CNNTLStateDetector(object):
@@ -9,26 +10,19 @@ class CNNTLStateDetector(object):
     PATH_TO_CKPT = './frozen_inference_graph.pb'
 
     def __init__(self):
-
-        # Define if printing debugging information
-        try:
-            self.DEBUGGING = DEBUGGING
-        except:
-            self.DEBUGGING = False
-
         """Initialization routines"""
 
         # Checking TensorFlow Version
-        print('TensorFlow Version: %s' % str(tf.__version__))
+        rospy.loginfo('TensorFlow Version: %s', tf.__version__)
 
         tf_config = tf.ConfigProto(log_device_placement=False) # If TRUE it will provide verbose reporting
         tf_config.operation_timeout_in_ms = 10000  # terminate if not returning in 10 seconds
 
         # Checking for a GPU
         if not tf.test.gpu_device_name():
-            print('No GPU found. Please use a GPU to assure promply response from tl_detector.')
+            rospy.logwarn('No GPU found. Please use a GPU to assure promply response from tl_detector.')
         else:
-            print('Default GPU Device: %s'% tf.test.gpu_device_name())
+            rospy.loginfo('Default GPU Device: %s', tf.test.gpu_device_name())
             tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5 # We divide GPU capacity into two
 
         # Restoring ssd_mobilenet_v1_coco
@@ -118,10 +112,6 @@ class CNNTLStateDetector(object):
         # As soon as we have a confirmed traffic light color, we return it
 
         for score, cut_image in sorted(detections, reverse=True):
-            if self.DEBUGGING:
-                cv2.imshow('image', cut_image)
-                cv2.waitKey(1)
-
             result = self.state_session.run(
                 [self.out], feed_dict={self.input_layer: [cut_image],
                                        self.keep_prob: 1.0})

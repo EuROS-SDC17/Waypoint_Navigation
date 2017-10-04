@@ -12,7 +12,6 @@ import yaml
 import numpy as np
 from datetime import datetime
 from scipy.spatial import KDTree
-import rospy
 
 STATE_COUNT_THRESHOLD = 3
 MAX_DISTANCE = 200  # Ignore traffic lights that are further
