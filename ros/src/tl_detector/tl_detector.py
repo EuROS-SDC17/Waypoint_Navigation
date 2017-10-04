@@ -375,6 +375,8 @@ class TLDetector(object):
             if cnn:
                 print("CNN Detected traffic light state is:", self.light_states[state_cnn])
 
+        if state_cnn == TrafficLight.YELLOW:
+            return TrafficLight.RED
         return state_cnn
 
     def process_traffic_lights(self, debugging=True):
