@@ -62,7 +62,7 @@ class TLDetector(object):
         self.traffic_lights_stops_tree = None
 
         # Traffic lights dictionary
-        self.light_states = {0: "RED", 1:"YELLOW", 2:"GREEN", 4:"UNKNOWN"}
+        self.light_states = {0: "RED", 1:"YELLOW", 2:"GREEN", 3:"UNKNOWN", 4:"UNKNOWN"}
 
         # Hash memory
         self.hash_waypoints = 0
@@ -187,6 +187,11 @@ class TLDetector(object):
         """
         if self.traffic_lights_tree:
             index_closest_light = self.traffic_lights_tree.query([pose], k=self.no_lights)[1][0]
+
+            # if there is only an item to check
+            if isinstance(index_closest_light, np.int32) or isinstance(index_closest_light, np.int64):
+                index_closest_light = [index_closest_light]
+
             for index in index_closest_light:
                 # Setting the index to int type
                 int_index = int(index)
@@ -199,6 +204,10 @@ class TLDetector(object):
                 # Returning only a traffic light that is ahead of us
                 if distance > 0:
                     return int_index, light_wp, distance
+
+            # if all the traffic lights are behind us, let's return the last one
+            return int_index, light_wp, distance
+
         else:
             return None, None, None
 
@@ -271,12 +280,15 @@ class TLDetector(object):
                     state = ground_truth
                 else:
                     state = self.get_light_state()
+                    rospy.logdebug("Detected traffic light color:", self.light_states[state])
 
                 #Yellow as red
                 if state == TrafficLight.YELLOW:
                     state = TrafficLight.RED
 
                 return closest_light_wp, state
+        else:
+            rospy.logdebug("Not receiving car position")
         return -1, TrafficLight.UNKNOWN
 
 
