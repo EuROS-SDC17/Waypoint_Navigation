@@ -67,13 +67,13 @@ class DBWNode(object):
         self.velocity = 0.
         rospy.Subscriber('/current_velocity', TwistStamped, self.vehicle_velocity_cb)
 
-        # TODO: Subscribe to all the topics you need to
         # steering
         rospy.Subscriber('/actual/steering_cmd', SteeringCmd, self.actual_steer_cb)
         # throttle
         rospy.Subscriber('/actual/throttle_cmd', ThrottleCmd, self.actual_throttle_cb)
         # brake
         rospy.Subscriber('/actual/brake_cmd', BrakeCmd, self.actual_brake_cb)
+
         # Drive-by-Wire enabled notification
         self.dbw_enabled = False
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
@@ -96,12 +96,9 @@ class DBWNode(object):
         """
         Main loop that periodically controls the vehicle
         """
-        # TODO doesn't make sense that this is higher than waypoint_updater rate
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
             if self.dbw_enabled:
-
-              # self.target_speed = 30.
               throttle, brake, steering = self.controller.control(\
                       rospy.get_time(), self.target_speed, self.velocity, self.cte) 
               rospy.loginfo("tgt v {:.2f} velocity {:.2f} cte {:.2f} thr {:.2f} brk {:.2f} str {:.2f}".format(\

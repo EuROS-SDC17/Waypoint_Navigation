@@ -31,7 +31,7 @@ def mph2kmph(mph):
 def kmph2mps(kmph):
     return kmph / 3.6
 
-LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. 
 # DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 MAXIMAL_VELOCITY = 50 # default velocity for 2nd phase waypoint updater
 DEFAULT_VELOCITY = 40 # default velocity for 2nd phase waypoint updater
@@ -64,8 +64,6 @@ class WaypointUpdater(object):
         self.position = None
         self.orientation = None
         self.base_waypoints = None
-        # TODO where is self.traffic_light used?
-        # self.traffic_light = None
         self.red_traffic_light_index = None
         self.previous_red_traffic_light_index = None
         self.obstacle = None
@@ -428,7 +426,8 @@ class WaypointUpdater(object):
 
         self.update_waypoint_speed(i, scan_direction, final_waypoints, final_indices, MAXIMAL_VELOCITY)
 
-        # TODO CTE should be based on final waypoints, not base_waypoints
+        # TODO if obstacle avoidance / lane change is needed in future implementation
+        # then CTE should be based on final waypoints, not base_waypoints
         cte = self.distance_from_line(self.position, \
                 self.base_waypoints[i].pose.pose.position, \
                 self.base_waypoints[(i-scan_direction) % length].pose.pose.position)

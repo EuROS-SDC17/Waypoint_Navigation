@@ -8,10 +8,8 @@ class LowPassFilter(object):
         """
         Initialize low-pass filter with cut-off frequency
         :param tau: scaled inverse cut-off frequency
-        :param ts: sampling period
         """
         self.b = math.log(tau / (tau + 1.))
-
         self.last_val = 0.
         self.ready = False
 

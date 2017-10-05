@@ -25,6 +25,7 @@ class PID(object):
         self.min = mn
         self.max = mx
 
+        # use a window to smoothen derivative
         self.d_buffer_size = 3
         self.d_buffer = [0.]*self.d_buffer_size
         self.d_buffer_t = [0.]*self.d_buffer_size
@@ -53,8 +54,8 @@ class PID(object):
 
         # integral part
         integral = self.int_val*math.exp(sample_time*self.i_d) + error * sample_time
-        # derivative part
 
+        # derivative part
         derivative = (error - self.last_error)
         self.d_sum += (derivative-self.d_buffer[self.d_ptr])
         self.d_buffer[self.d_ptr] = derivative
@@ -70,7 +71,6 @@ class PID(object):
         # rospy.loginfo("err {:.2f} d {:.2f} y {:.2f}".format(error, derivative, y))
         val = max(self.min, min(y, self.max))
 
-
         # limit value to safe ranges
         if val > self.max:
             val = self.max
@@ -81,3 +81,4 @@ class PID(object):
         self.last_error = error
 
         return val
+
