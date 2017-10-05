@@ -4,6 +4,11 @@ import cv2
 import numpy as np
 import rospy
 
+# SANITY_CHECK flag activates the display of what camera sees
+# with white bounding boxes for all detections that may look like a traffic light
+# and red, yellow or green boxes for detections that have been classified in terms of light
+
+SANITY_CHECK = False
 
 class CNNTLStateDetector(object):
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
@@ -55,6 +60,24 @@ class CNNTLStateDetector(object):
             # image is already a Numpy ndarray
             return image
 
+    def expand_box(self, x1, y1, x2, y2, expansion=1.0):
+        x_expansion = int((abs(x1-x2) * expansion) / 2)
+        y_expansion = int((abs(y1 - y2) * expansion) / 2)
+        if x1 > x2:
+            x1 += x_expansion
+            x2 -= x_expansion
+        else:
+            x1 -= x_expansion
+            x2 += x_expansion
+        if y1 > y2:
+            y1 += y_expansion
+            y2 -= y_expansion
+        else:
+            y1 -= y_expansion
+            y2 += y_expansion
+        return x1, y1, x2, y2
+
+
     def get_classification(self, image):
         """
         Determines the color of the traffic light in a
@@ -81,11 +104,8 @@ class CNNTLStateDetector(object):
         detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
         num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
 
-        # Assuring the input is in RGB format
-        RGB_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
         # Assuring the image is a Numpy array
-        image_np = self.load_image_into_numpy_array(RGB_image)
+        image_np = self.load_image_into_numpy_array(image)
         image_np_expanded = np.expand_dims(image_np, axis=0)
 
         # Detecting boxes, classes and scores in the image
@@ -98,33 +118,59 @@ class CNNTLStateDetector(object):
         detections = list()
         for i in range(0, len(boxes[0])):
             # Scores are sorted, ignore matches with very low score
+            # (0.25 is the standard at Google and in papers)
             # cClass 10 is a traffic light
-            if scores[0][i] > 0.1 and classes[0][i] == 10:
+            if scores[0][i] > 0.175 and classes[0][i] == 10:
                 start_x = int(boxes[0][i][0] * image_np.shape[0])
                 end_x = int(boxes[0][i][2] * image_np.shape[0])
                 start_y = int(boxes[0][i][1] * image_np.shape[1])
                 end_y = int(boxes[0][i][3] * image_np.shape[1])
 
+                # Since SSD detection is sometimes rough and imprecise, we slightly increse the detected box
+                start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, expansion=1.005)
+
                 cut_image = image_np[start_x:end_x, start_y:end_y]
-                detections.append([scores[0][i], cut_image])
+                detections.append([scores[0][i], cut_image, [(start_y, start_x), (end_y, end_x)]])
 
         # We consider all the detections starting from the most confident ones
         # As soon as we have a confirmed traffic light color, we return it
 
-        for score, cut_image in sorted(detections, reverse=True):
+        detections = sorted(detections, reverse=True)
+
+        if SANITY_CHECK:
+            # Assuring the input is in RGB format
+            RGB_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            # Projecting all detections as white boxes
+            for score, cut_image, pos in detections:
+                cv2.rectangle(RGB_image, pos[0], pos[1], (255, 255, 255), 2)
+
+        returning_value = TrafficLight.UNKNOWN
+        for score, cut_image, pos in detections:
             result = self.state_session.run(
                 [self.out], feed_dict={self.input_layer: [cut_image],
                                        self.keep_prob: 1.0})
             if int(result[0][0]) == 0:
-                return TrafficLight.RED
+                if SANITY_CHECK:
+                    cv2.rectangle(RGB_image, pos[0], pos[1], (0, 0, 255), 2)
+                returning_value = TrafficLight.RED
+                break
             elif int(result[0][0]) == 1:
-                return TrafficLight.YELLOW
+                if SANITY_CHECK:
+                    cv2.rectangle(RGB_image, pos[0], pos[1], (0, 255, 255), 2)
+                returning_value = TrafficLight.YELLOW
+                break
             elif int(result[0][0]) == 2:
-                return TrafficLight.GREEN
+                if SANITY_CHECK:
+                    cv2.rectangle(RGB_image, pos[0], pos[1], (0, 255, 0), 2)
+                returning_value = TrafficLight.GREEN
+                break
             else:
                 # If the result is unknown (class==3),
                 # we pass to the following detection, if any left
                 continue
 
         # We return unknown only if all detections failed
-        return TrafficLight.UNKNOWN
+        if SANITY_CHECK:
+            cv2.imshow('camera', RGB_image)
+            cv2.waitKey(1)
+        return returning_value
