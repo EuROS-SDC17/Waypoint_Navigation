@@ -68,5 +68,7 @@ rosbag play -l traffic_light_bag_files/loop_with_traffic_light.bag
 4. Launch your project in site mode
 ```bash
 cd CarND-Capstone/ros
+catkin_make
+source devel/setup.sh
 roslaunch launch/site.launch
 ```
