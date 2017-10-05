@@ -60,7 +60,7 @@ class CNNTLStateDetector(object):
             # image is already a Numpy ndarray
             return image
 
-    def expand_box(self, x1, y1, x2, y2, expansion=1.0):
+    def expand_box(self, x1, y1, x2, y2, shape, expansion=1.0):
         x_expansion = int((abs(x1-x2) * expansion) / 2)
         y_expansion = int((abs(y1 - y2) * expansion) / 2)
         if x1 > x2:
@@ -75,7 +75,7 @@ class CNNTLStateDetector(object):
         else:
             y1 -= y_expansion
             y2 += y_expansion
-        return x1, y1, x2, y2
+        return max(0, x1), max(0, y1), min(shape[0], x2), min(shape[1], y2)
 
 
     def get_classification(self, image):
@@ -127,7 +127,7 @@ class CNNTLStateDetector(object):
                 end_y = int(boxes[0][i][3] * image_np.shape[1])
 
                 # Since SSD detection is sometimes rough and imprecise, we slightly increse the detected box
-                start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, expansion=1.005)
+                start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, image_np.shape, expansion=1.005)
 
                 cut_image = image_np[start_x:end_x, start_y:end_y]
                 detections.append([scores[0][i], cut_image, [(start_y, start_x), (end_y, end_x)]])

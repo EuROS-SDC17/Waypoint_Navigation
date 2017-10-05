@@ -280,7 +280,7 @@ class TLDetector(object):
                     state = ground_truth
                 else:
                     state = self.get_light_state()
-                    rospy.logdebug("Detected traffic light color:", self.light_states[state])
+                    rospy.logdebug("Detected traffic light color:%s", self.light_states[state])
 
                 #Yellow as red
                 if state == TrafficLight.YELLOW:
