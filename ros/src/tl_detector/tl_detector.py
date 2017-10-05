@@ -202,7 +202,7 @@ class TLDetector(object):
         else:
             return None, None, None
 
-    def get_light_state(self, light, ground_truth=None, hsv=False, cnn=True, debugging=False):
+    def get_light_state(self):
         """Determines the current color of the traffic light
 
         Args:
@@ -270,7 +270,7 @@ class TLDetector(object):
                 if self.CLASSIFIER_DISABLED:
                     state = ground_truth
                 else:
-                    state = self.get_light_state(closest_light, ground_truth, hsv=False, cnn=True)
+                    state = self.get_light_state()
 
                 #Yellow as red
                 if state == TrafficLight.YELLOW:
