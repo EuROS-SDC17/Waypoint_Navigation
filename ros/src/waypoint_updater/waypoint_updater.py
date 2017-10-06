@@ -82,6 +82,7 @@ class WaypointUpdater(object):
         rospy.logdebug("received pose: {0}".format(msg))
         self.position = msg.pose.position
 
+        # RViz markers
         marker = Marker()
         marker.header.frame_id = "/world"
         marker.ns = "pose"
@@ -120,6 +121,7 @@ class WaypointUpdater(object):
         if self.base_waypoints is None:
             self.base_waypoints = msg.waypoints
 
+        # RViz markers
         marker = Marker()
         marker.header.frame_id = "/world"
         marker.ns = "road"
@@ -163,6 +165,7 @@ class WaypointUpdater(object):
         self.red_traffic_light_index = index if index >= 0 else None
 
         rospy.logdebug("nearest red traffic light at waypoint: {}".format(index))
+        # RViz markers
         marker = Marker()
         marker.header.frame_id = "/world"
         marker.ns = "traffic_light"
