@@ -257,7 +257,6 @@ class WaypointUpdater(object):
         rospy.logdebug("find nearest waypoint for position: {0}".format(self.position))
 
         min_distance = 1E6
-        min_index = -1
 
         if self.previous_closest_wp_index is None:
             candidate_index = None
@@ -267,22 +266,6 @@ class WaypointUpdater(object):
                 if distance < min_distance:
                     min_distance = distance
                     candidate_index = index
-            # NOTE below is a somewhat approximate but faster version
-            # will fail if there are different sections of the track
-            # that are very close. If we don't do this very often
-            # we could afford to do a full scan
-            # dist_decreased = False
-            # prev_dist = None
-            # candidate_index = None
-            # for index,waypoint in enumerate(self.base_waypoints):
-            #     wp = waypoint.pose.pose.position
-            #     distance = self.distance(self.position, wp)
-            #     if (prev_dist is not None) and (distance>prev_dist) and (dist_decreased):
-            #         break
-            #     candidate_index = index
-            #     if (prev_dist is not None) and (distance<prev_dist):
-            #         dist_decreased = True
-            #     prev_dist = distance
         else:
             candidate_index = self.previous_closest_wp_index
 
@@ -376,7 +359,7 @@ class WaypointUpdater(object):
         i = self.find_nearest_waypoint_index_ahead()
 
         if self.nearest_waypoint_display_count == 0:
-            rospy.loginfo("nearest waypoint {0} of {1}".format(\
+            rospy.logdebug("nearest waypoint {0} of {1}".format(\
                     i, 0 if self.base_waypoints is None else len(self.base_waypoints)))
         self.nearest_waypoint_display_count = (self.nearest_waypoint_display_count+1) % \
                 self.nearest_waypoint_display_interval
@@ -411,18 +394,6 @@ class WaypointUpdater(object):
                 total_dist += self.distance(final_waypoints[j].pose.pose.position, final_waypoints[j-1].pose.pose.position)
             else:
                 total_dist = self.distance(self.position, final_waypoints[0].pose.pose.position)
-            if (index == self.red_traffic_light_index) and (total_dist > MIN_STOP_DISTANCE):
-                tf_wp_index = j
-
-        # if tf_wp_index is not None:
-        #     total_dist = 0.
-        #     j = tf_wp_index
-        #     while total_dist < STOP_DISTANCE and j>0:
-        #         total_dist += self.distance(final_waypoints[j-1].pose.pose.position, final_waypoints[j].pose.pose.position)
-        #         j -= 1
-        #     while j < len(final_waypoints):
-        #         final_waypoints[j].twist.twist.linear.x = 0.
-        #         j += 1
 
         self.update_waypoint_speed(i, scan_direction, final_waypoints, final_indices, MAXIMAL_VELOCITY)
 
@@ -493,25 +464,25 @@ class WaypointUpdater(object):
         """
         Estimate braking distance at a given velocity
         :param self:
-        :param velocity:
-        :return:
+        :param velocity: current vehicle velocity
+        :return: braking distance at a given velocity
         """
         return STOP_DISTANCE
 
     def update_waypoint_speed(self, nearest_ahead_index, scan_direction, final_waypoints, final_indices, velocity):
         """
-
+        Updates velocities at waypoints
         :param self:
-        :param nearest_ahead_index:
-        :param scan_direction:
-        :param final_waypoints:
-        :param final_indices:
-        :param velocity:
-        :return:
+        :param nearest_ahead_index: index of nearest waypoint ahead
+        :param scan_direction: direction of scanning the waypoint array to move forward
+        :param final_waypoints: currently chosen waypoints to drive through
+        :param final_indices: indices of chosen waypoints
+        :param velocity: current vehicle velocity
+        :return: waypoints with velocities set
         """
         if self.red_traffic_light_index == None:
             # if there is no red/yellow traffic light nearby, set velocity to maximum
-            # rospy.loginfo("No red light, setting maximal velocity")
+            rospy.logdebug("No red light, setting maximal velocity")
             for waypoint in final_waypoints:
                 waypoint.twist.twist.linear.x = kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
         else:
@@ -519,19 +490,19 @@ class WaypointUpdater(object):
             # either there is a red, velocities differ, or there is no plan
             if self.red_traffic_light_index != self.previous_red_traffic_light_index or not self.velocity_plan:
                 self.velocity_plan = {}
-                rospy.loginfo("Preparing velocity plan, rwp={0}, prwp={1}".format(self.red_traffic_light_index, self.previous_red_traffic_light_index))
+                rospy.logdebug("Preparing velocity plan, rwp={0}, prwp={1}".format(self.red_traffic_light_index, self.previous_red_traffic_light_index))
                 # prepare a velocity plan taking into account velocity; operates on base_waypoints not on final ones
                 stop_distance = self.get_braking_distance(velocity)
-                rospy.loginfo("Stop distance={:.2f}".format(stop_distance))
+                rospy.logdebug("Stop distance={:.2f}".format(stop_distance))
                 # indices in base_waypoints that need their speed set based on red traffic light
                 cumulative_distance = 0
                 i = self.red_traffic_light_index
                 nodes = [i]
-                rospy.loginfo("Red light position:{0}".format(self.red_traffic_light_index))
+                rospy.logdebug("Red light position:{0}".format(self.red_traffic_light_index))
                 sentinel = 5
                 while cumulative_distance < stop_distance:
                     j = i
-                    # rospy.loginfo("i={0} sd={1} l={2}".format(i, scan_direction, length))
+                    rospy.logdebug("i={0} sd={1} l={2}".format(i, scan_direction, length))
                     i -= (1 * scan_direction)
                     i = i % length
                     cumulative_distance += self.distance(self.base_waypoints[i].pose.pose.position,
@@ -543,28 +514,21 @@ class WaypointUpdater(object):
 
                 for i, node in enumerate(nodes):
                     target_velocity = float(count - sentinel - i) / float(count) * kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
-                    # target_velocity = float(count - i - 1) / float(count) * kmph2mps(mph2kmph(5))
                     self.velocity_plan[node] = target_velocity
-                print "sentinel ",
                 for i in range(sentinel):
-                    print "i:", str(count - i - 1), "n:", nodes[count - i - 1]
                     self.velocity_plan[nodes[count - i - 1]] = 0
 
-                rospy.loginfo("Velocity plan: {0}".format(self.velocity_plan))
-                rospy.loginfo("Final indices: {0}".format(final_indices))
+                rospy.logdebug("Velocity plan: {0}".format(self.velocity_plan))
+                rospy.logdebug("Final indices: {0}".format(final_indices))
             # use current velocity plan
             in_brake_zone = False
             for i, idx in enumerate(final_indices):
                 if idx in self.velocity_plan:
                     final_waypoints[i].twist.twist.linear.x = self.velocity_plan[idx]
-                    print "node:",idx,"vel:",self.velocity_plan[idx],
                     in_brake_zone = True
                 else:
                     velocity = 0 if in_brake_zone else kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
                     final_waypoints[i].twist.twist.linear.x = velocity
-                    print "node:", idx, "vel:", velocity,
-            print
-            print "cn=", nearest_ahead_index, "rl=", self.red_traffic_light_index
 
         return final_waypoints
 
