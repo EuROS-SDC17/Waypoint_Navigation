@@ -8,7 +8,7 @@ import rospy
 # with white bounding boxes for all detections that may look like a traffic light
 # and red, yellow or green boxes for detections that have been classified in terms of light
 
-SANITY_CHECK = False
+SANITY_CHECK = True
 
 class CNNTLStateDetector(object):
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
@@ -18,7 +18,7 @@ class CNNTLStateDetector(object):
         """Initialization routines"""
 
         # Checking TensorFlow Version
-        rospy.loginfo('TensorFlow Version: %s', tf.__version__)
+        rospy.loginfo('TensorFlow Version: %s' % tf.__version__)
 
         tf_config = tf.ConfigProto(log_device_placement=False) # If TRUE it will provide verbose reporting
         tf_config.operation_timeout_in_ms = 10000  # terminate if not returning in 10 seconds
@@ -27,7 +27,7 @@ class CNNTLStateDetector(object):
         if not tf.test.gpu_device_name():
             rospy.logwarn('No GPU found. Please use a GPU to assure promply response from tl_detector.')
         else:
-            rospy.loginfo('Default GPU Device: %s', tf.test.gpu_device_name())
+            rospy.loginfo('Default GPU Device: %s' % tf.test.gpu_device_name())
             tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5 # We divide GPU capacity into two
 
         # Restoring ssd_mobilenet_v1_coco
@@ -126,8 +126,8 @@ class CNNTLStateDetector(object):
                 start_y = int(boxes[0][i][1] * image_np.shape[1])
                 end_y = int(boxes[0][i][3] * image_np.shape[1])
 
-                # Since SSD detection is sometimes rough and imprecise, we slightly increse the detected box
-                start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, image_np.shape, expansion=1.005)
+                # SSD detection is sometimes rough and imprecise, we might consider slightly incresing the detected box
+                # start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, image_np.shape, expansion=1.005)
 
                 cut_image = image_np[start_x:end_x, start_y:end_y]
                 detections.append([scores[0][i], cut_image, [(start_y, start_x), (end_y, end_x)]])
