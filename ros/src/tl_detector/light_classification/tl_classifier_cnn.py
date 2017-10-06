@@ -18,7 +18,7 @@ class CNNTLStateDetector(object):
         """Initialization routines"""
 
         # Checking TensorFlow Version
-        rospy.loginfo('TensorFlow Version: %s', tf.__version__)
+        rospy.loginfo('TensorFlow Version: %s' % tf.__version__)
 
         tf_config = tf.ConfigProto(log_device_placement=False) # If TRUE it will provide verbose reporting
         tf_config.operation_timeout_in_ms = 10000  # terminate if not returning in 10 seconds
@@ -27,7 +27,7 @@ class CNNTLStateDetector(object):
         if not tf.test.gpu_device_name():
             rospy.logwarn('No GPU found. Please use a GPU to assure promply response from tl_detector.')
         else:
-            rospy.loginfo('Default GPU Device: %s', tf.test.gpu_device_name())
+            rospy.loginfo('Default GPU Device: %s' % tf.test.gpu_device_name())
             tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5 # We divide GPU capacity into two
 
         # Restoring ssd_mobilenet_v1_coco
@@ -60,7 +60,7 @@ class CNNTLStateDetector(object):
             # image is already a Numpy ndarray
             return image
 
-    def expand_box(self, x1, y1, x2, y2, expansion=1.0):
+    def expand_box(self, x1, y1, x2, y2, shape, expansion=1.0):
         x_expansion = int((abs(x1-x2) * expansion) / 2)
         y_expansion = int((abs(y1 - y2) * expansion) / 2)
         if x1 > x2:
@@ -75,7 +75,7 @@ class CNNTLStateDetector(object):
         else:
             y1 -= y_expansion
             y2 += y_expansion
-        return x1, y1, x2, y2
+        return max(0, x1), max(0, y1), min(shape[0], x2), min(shape[1], y2)
 
 
     def get_classification(self, image):
@@ -126,8 +126,8 @@ class CNNTLStateDetector(object):
                 start_y = int(boxes[0][i][1] * image_np.shape[1])
                 end_y = int(boxes[0][i][3] * image_np.shape[1])
 
-                # Since SSD detection is sometimes rough and imprecise, we slightly increse the detected box
-                start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, expansion=1.005)
+                # SSD detection is sometimes rough and imprecise, we might consider slightly increasing the detected box
+                # start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, image_np.shape, expansion=1.005)
 
                 cut_image = image_np[start_x:end_x, start_y:end_y]
                 detections.append([scores[0][i], cut_image, [(start_y, start_x), (end_y, end_x)]])

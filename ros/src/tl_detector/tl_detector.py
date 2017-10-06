@@ -252,7 +252,7 @@ class TLDetector(object):
 
             # Transforming the car position into the closest waypoint
             car_position = self.get_closest_waypoint(pose)
-            rospy.logdebug("Car position: %d", car_position)
+            rospy.logdebug("Car position: %d" % car_position)
 
             # Finding the closest traffic light by comparing waypoints
             closest_light_index, closest_light_wp, closest_distance = self.get_closest_traffic_light(pose, car_position)
@@ -268,9 +268,9 @@ class TLDetector(object):
             if closest_light:
                 ground_truth = self.lights[closest_light_index].state
 
-                rospy.logdebug("Ground truth state is: %s", self.light_states[ground_truth])
-                rospy.logdebug("Detected traffic light no %d at distance: %d", closest_light_index, closest_distance)
-                rospy.logdebug("the light is at %s the stop line is at %s", closest_light, self.stop_positions[closest_light_index])
+                rospy.logdebug("Ground truth state is: %s" % self.light_states[ground_truth])
+                rospy.logdebug("Detected traffic light no %d at distance: %d" % (closest_light_index, closest_distance))
+                rospy.logdebug("the light is at %s the stop line is at %s" % (closest_light, self.stop_positions[closest_light_index]))
 
                 # Depending if we are debugging or not, we can get the traffic light location
                 # from the topic /vehicle/traffic_lights which is the ground truth
@@ -280,7 +280,7 @@ class TLDetector(object):
                     state = ground_truth
                 else:
                     state = self.get_light_state()
-                    rospy.logdebug("Detected traffic light color:", self.light_states[state])
+                    rospy.logdebug("Detected traffic light color:%s" % self.light_states[state])
 
                 #Yellow as red
                 if state == TrafficLight.YELLOW:
