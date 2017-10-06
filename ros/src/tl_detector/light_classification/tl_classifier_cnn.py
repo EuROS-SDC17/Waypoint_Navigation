@@ -8,7 +8,7 @@ import rospy
 # with white bounding boxes for all detections that may look like a traffic light
 # and red, yellow or green boxes for detections that have been classified in terms of light
 
-SANITY_CHECK = True
+SANITY_CHECK = False
 
 class CNNTLStateDetector(object):
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
@@ -126,7 +126,7 @@ class CNNTLStateDetector(object):
                 start_y = int(boxes[0][i][1] * image_np.shape[1])
                 end_y = int(boxes[0][i][3] * image_np.shape[1])
 
-                # SSD detection is sometimes rough and imprecise, we might consider slightly incresing the detected box
+                # SSD detection is sometimes rough and imprecise, we might consider slightly increasing the detected box
                 # start_x, start_y, end_x, end_y = self.expand_box(start_x, start_y, end_x, end_y, image_np.shape, expansion=1.005)
 
                 cut_image = image_np[start_x:end_x, start_y:end_y]
