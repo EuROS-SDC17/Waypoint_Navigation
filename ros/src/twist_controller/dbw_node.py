@@ -101,7 +101,7 @@ class DBWNode(object):
             if self.dbw_enabled:
               throttle, brake, steering = self.controller.control(\
                       rospy.get_time(), self.target_speed, self.velocity, self.cte) 
-              rospy.loginfo("tgt v {:.2f} velocity {:.2f} cte {:.2f} thr {:.2f} brk {:.2f} str {:.2f}".format(\
+              rospy.logdebug("tgt v {:.2f} velocity {:.2f} cte {:.2f} thr {:.2f} brk {:.2f} str {:.2f}".format(\
                       self.target_speed, \
                       self.velocity, self.cte, throttle, brake, steering))
               self.publish(throttle, brake, -steering)
