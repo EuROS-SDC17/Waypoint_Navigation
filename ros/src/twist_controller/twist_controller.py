@@ -5,9 +5,11 @@ from lowpass import LowPassFilter
 GAS_DENSITY = 2.858
 ONE_MPH = 0.44704
 DEFAULT_STEER_RATIO = 14.8
-GEAR_RATIO = 2.4/1  ## 1st gear ratio 2.4:1
+DEFAULT_GEAR_RATIO = 2.4 / 1  ## 1st gear ratio 2.4:1
 THROTTLE_ADJUSTMENT = 1000.  # magic constant for throttle
 BRAKE_ADJUSTMENT = 60  # magic constat for brake
+DEFAULT_WEIGHT = 1080.
+DEFAULT_WHEEL_RADIUS = 0.335
 
 class Controller(object):
     """
@@ -80,8 +82,8 @@ class Controller(object):
 
         if target_velocity > 0:
             max_acceleration = (target_velocity-current_velocity) / t_delta
-            max_torque = self.vehicle_mass * GEAR_RATIO * self.wheel_radius * max_acceleration
-            acceleration_normalization = max_torque / (1080. * GEAR_RATIO * 0.335 * self.accel_limit * THROTTLE_ADJUSTMENT)
+            max_torque = self.vehicle_mass * DEFAULT_GEAR_RATIO * self.wheel_radius * max_acceleration
+            acceleration_normalization = max_torque / (self.accel_limit * DEFAULT_GEAR_RATIO * DEFAULT_WEIGHT * DEFAULT_WHEEL_RADIUS * THROTTLE_ADJUSTMENT)
             throttle = self.throttle_pid.step(
                     (target_velocity-current_velocity)/self.max_velocity, t_delta)
             throttle *= max(5.,current_velocity)*self.max_velocity / acceleration_normalization
@@ -91,7 +93,7 @@ class Controller(object):
         if (target_velocity == 0 and current_velocity > 0) or (current_velocity * .99 > target_velocity):
             max_deceleration = (target_velocity-current_velocity) / t_delta
             max_torque = self.vehicle_mass * self.wheel_radius * max_deceleration
-            deceleration_normalization = max_torque / (1080. * 0.335 * self.decel_limit * BRAKE_ADJUSTMENT)
+            deceleration_normalization = max_torque / (self.decel_limit * DEFAULT_WEIGHT * DEFAULT_WHEEL_RADIUS * BRAKE_ADJUSTMENT)
             brake = self.brake_pid.step(
                 (current_velocity-target_velocity)/self.max_velocity, t_delta)
             brake *= current_velocity*self.max_velocity
