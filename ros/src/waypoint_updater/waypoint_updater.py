@@ -28,10 +28,16 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 def mph2kmph(mph):
     return mph * 1.6093
 
+def kmph2mph(kmph):
+    return kmph / 1.6093
+
 def kmph2mps(kmph):
     return kmph / 3.6
 
-LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. 
+def mps2kmph(mps):
+    return mps * 3.6
+
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish.
 # DEFAULT_VELOCITY = 10 # default velocity for 1st phase waypoint updater
 MAXIMAL_VELOCITY = 50 # default velocity for 2nd phase waypoint updater
 DEFAULT_VELOCITY = 40 # default velocity for 2nd phase waypoint updater
@@ -118,8 +124,13 @@ class WaypointUpdater(object):
         """
         rospy.loginfo("received waypoints: {0}".format(len(msg.waypoints)))
 
+        global MAXIMAL_VELOCITY
+        global DEFAULT_VELOCITY
+
         if self.base_waypoints is None:
             self.base_waypoints = msg.waypoints
+            MAXIMAL_VELOCITY = DEFAULT_VELOCITY = self.base_waypoints[0].twist.twist.linear.x
+            # print "!!velocity===", MAXIMAL_VELOCITY, DEFAULT_VELOCITY
 
         # RViz markers
         marker = Marker()
@@ -148,6 +159,7 @@ class WaypointUpdater(object):
         p.y = self.base_waypoints[0].pose.pose.position.y
         p.z = self.base_waypoints[0].pose.pose.position.z
         marker.points.append(p)
+
 
         # Publish the road waypoints (grey)
         self.vis_pub.publish(marker)
@@ -282,7 +294,7 @@ class WaypointUpdater(object):
             rospy.logdebug("orientation = {0}, direction = {1}".format(self.orientation, direction))
             # only waypoints ahead are relevant
             if not self.is_matching_orientation(self.orientation, direction):
-                continue;
+                continue
             # is it the nearest waypoint so far?
             distance = self.distance(self.position, wp)
             if distance < min_distance:
@@ -324,7 +336,7 @@ class WaypointUpdater(object):
         """
 
         #print "dp",a.x * b.x + a.y * b.y + a.z * b.z
-        return a.x * b.x + a.y * b.y + a.z * b.z > 0;
+        return a.x * b.x + a.y * b.y + a.z * b.z > 0
 
     def distance(self, a, b):
         """
@@ -378,6 +390,7 @@ class WaypointUpdater(object):
         next_i = (i + 1) % length
         n_wb = self.base_waypoints[next_i].pose.pose.position
         next_direction = self.make_vector(self.position, n_wb)
+
         scan_direction = 1 # default direction is towards next waypoint in sequence
         if not self.is_matching_orientation(self.orientation, next_direction):
             # if orientation with next waypoint doesn't match, we need to scan backwards
@@ -389,7 +402,8 @@ class WaypointUpdater(object):
         tf_wp_index = None
         for j in range(0, LOOKAHEAD_WPS):
             index = (i + j*scan_direction) % length
-            self.set_waypoint_velocity(self.base_waypoints, index, kmph2mps(mph2kmph(DEFAULT_VELOCITY)))
+            global DEFAULT_VELOCITY
+            self.set_waypoint_velocity(self.base_waypoints, index, kmph2mph(mps2kmph(DEFAULT_VELOCITY)))
             waypoint = self.base_waypoints[index]
             final_waypoints.append(waypoint)
             final_indices.append(index)
@@ -470,9 +484,11 @@ class WaypointUpdater(object):
         :param velocity: current vehicle velocity
         :return: braking distance at a given velocity
         """
-        return STOP_DISTANCE
+        # scale linearly to 60mph
+        ratio = min(1.0, velocity / 40.)
+        return ratio * STOP_DISTANCE
 
-    def update_waypoint_speed(self, nearest_ahead_index, scan_direction, final_waypoints, final_indices, velocity):
+    def update_waypoint_speed(self, nearest_ahead_index, scan_direction, final_waypoints, final_indices, maximal_velocity):
         """
         Updates velocities at waypoints
         :param self:
@@ -480,14 +496,14 @@ class WaypointUpdater(object):
         :param scan_direction: direction of scanning the waypoint array to move forward
         :param final_waypoints: currently chosen waypoints to drive through
         :param final_indices: indices of chosen waypoints
-        :param velocity: current vehicle velocity
+        :param maximal_velocity: maximal vehicle velocity
         :return: waypoints with velocities set
         """
         if self.red_traffic_light_index == None:
             # if there is no red/yellow traffic light nearby, set velocity to maximum
             rospy.logdebug("No red light, setting maximal velocity")
             for waypoint in final_waypoints:
-                waypoint.twist.twist.linear.x = kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
+                waypoint.twist.twist.linear.x = kmph2mph(mps2kmph(MAXIMAL_VELOCITY))
         else:
             length = len(self.base_waypoints)
             # either there is a red, velocities differ, or there is no plan
@@ -495,7 +511,7 @@ class WaypointUpdater(object):
                 self.velocity_plan = {}
                 rospy.logdebug("Preparing velocity plan, rwp={0}, prwp={1}".format(self.red_traffic_light_index, self.previous_red_traffic_light_index))
                 # prepare a velocity plan taking into account velocity; operates on base_waypoints not on final ones
-                stop_distance = self.get_braking_distance(velocity)
+                stop_distance = self.get_braking_distance(maximal_velocity)
                 rospy.logdebug("Stop distance={:.2f}".format(stop_distance))
                 # indices in base_waypoints that need their speed set based on red traffic light
                 cumulative_distance = 0
@@ -516,7 +532,8 @@ class WaypointUpdater(object):
                 rospy.logdebug("Identified waypoints: {0}".format(nodes))
 
                 for i, node in enumerate(nodes):
-                    target_velocity = float(count - sentinel - i) / float(count) * kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
+                    target_velocity = float(count - sentinel - i) / float(count) * kmph2mph(mps2kmph(MAXIMAL_VELOCITY))
+                    target_velocity = max(0., target_velocity)
                     self.velocity_plan[node] = target_velocity
                 for i in range(sentinel):
                     self.velocity_plan[nodes[count - i - 1]] = 0
@@ -530,8 +547,8 @@ class WaypointUpdater(object):
                     final_waypoints[i].twist.twist.linear.x = self.velocity_plan[idx]
                     in_brake_zone = True
                 else:
-                    velocity = 0 if in_brake_zone else kmph2mps(mph2kmph(MAXIMAL_VELOCITY))
-                    final_waypoints[i].twist.twist.linear.x = velocity
+                    maximal_velocity = 0 if in_brake_zone else kmph2mph(mps2kmph(MAXIMAL_VELOCITY))
+                    final_waypoints[i].twist.twist.linear.x = maximal_velocity
 
         return final_waypoints
 

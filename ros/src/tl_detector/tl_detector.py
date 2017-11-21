@@ -16,6 +16,7 @@ from scipy.spatial import KDTree
 STATE_COUNT_THRESHOLD = 3
 MAX_DISTANCE = 200  # Ignore traffic lights that are further
 CLASSIFIER_DISABLED = False
+# CLASSIFIER_DISABLED = True
 
 
 class TLDetector(object):
